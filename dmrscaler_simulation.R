@@ -25,10 +25,11 @@ controlBetaMatrix<-controlBetaMatrix[rownames(controlBetaMatrix)%in%controlCGloc
 
 ############################      Set up data      ############################
 all_results <- list() 
-pars <- list(delta_beta = c(0.05 ) ) #, 0.1, 0.15, 0.2, 0.25, 0.3) ) #,
-#             noise = c(0, 0.1, 0.2, 0.3, 0.4, 0.5),
-#             num_samples = c(5, 6, 7, 8, 10, 12, 15),
-#             dmr_count = c(10, 50, 100, 200))
+pars <- list( delta_beta = c(0.05 , 0.1, 0.15, 0.2, 0.25, 0.3) 
+              , noise = c(0, 0.1, 0.2, 0.3, 0.4, 0.5)
+              , num_samples = c(5, 6, 7, 8, 10, 12, 15)
+#             , dmr_count = c(10, 50, 100, 200)
+             )
 
 
 for(name in names(pars)){
@@ -49,16 +50,20 @@ for(name in names(pars)){
     }
     if(name == "dmr_count"){ n_promoters <- par_var[element] }    
     
-    nrows = 3  ## number to run for each setting 
+    nrows = 5  ## number to run for each setting 
     results_stats <- data.frame( seq(1,nrows), 
                                  delta_beta=rep(delta_beta, nrows),
                                  noise=rep(noise, nrows),
                                  num_samples=rep(num_cases, nrows),
                                  dmr_count=rep(n_promoters, nrows),
-                                 FP=numeric(length = nrows),
-                                 FN=numeric(length = nrows),
-                                 Jaccard=numeric(length = nrows))
-
+                                 FP=rep(-1, nrows),
+                                 FN=rep(-1, nrows),
+                                 Jaccard=rep(-1, nrows))
+                                 
+#                                 FP=numeric(length = nrows),
+#                                 FN=numeric(length = nrows),
+#                                 Jaccard=numeric(length = nrows))
+  try(
     for(test_num in 1:nrows) {
       
       ### Angela's Code
@@ -71,12 +76,12 @@ for(name in names(pars)){
       
       simulatedbeta <- alterByMu(mu=delta_beta, betaMatrix = controlBetaMatrix, expDesign = twogroups, cpgTable = randcgs)
       
-      ### quick visual test 
-      temp <- rowMeans(simulatedbeta[,twogroups[twogroups$group=="A","sampleID"]])-rowMeans(simulatedbeta[,twogroups[twogroups$group=="Aprime","sampleID"]])
-      hist(temp, breaks = 50)
-      temp <- controlBetaMatrix-simulatedbeta
-      hist(as.vector(as.matrix(temp)), breaks = 50)
-      ###
+      # ### quick visual test 
+      # temp <- rowMeans(simulatedbeta[,twogroups[twogroups$group=="A","sampleID"]])-rowMeans(simulatedbeta[,twogroups[twogroups$group=="Aprime","sampleID"]])
+      # hist(temp, breaks = 50)
+      # temp <- controlBetaMatrix-simulatedbeta
+      # hist(as.vector(as.matrix(temp)), breaks = 50)
+      # ###
       
       
       all_case <- which(is.element(colnames(simulatedbeta), twogroups[twogroups$group=="A","sampleID"]))
@@ -123,7 +128,7 @@ for(name in names(pars)){
         nn_step_fraction = 2 
         nn_step_size <- floor(layer_sizes[i] / nn_step_fraction)
         nn <- dmrscaler::n_nearest_window_scoring_func(indat = data, n_nearest = layer_sizes[i], step_size = nn_step_size, FDR = fdrscaler)
-        signn <- dmrscaler::determine_significant_windows(window_results=nn, indat=data, quants=cltable , quants_significance_cutoff = "0.99999" )
+        signn <- dmrscaler::determine_significant_windows(window_results=nn, indat=data, quants=cltable , quants_significance_cutoff = "0.99" )
         signn <- dmrscaler::add_significance(three_window_list =  signn, lookup_table = cltable)
         layers[[i]]<-signn
       }
@@ -179,21 +184,51 @@ for(name in names(pars)){
       randbed_true_pos$end <- as.numeric(randbed_true_pos$end)
       
       results_stats$Jaccard[test_num] <- bed_jaccard(x=layer_res_bed, y=randbed_true_pos)$jaccard
-      
       ###
- 
       irang_true_pos <- IRanges(start = randbed_true_pos$start ,end = randbed_true_pos$end, names = randbed_true_pos$chrom)
       irang_layers <- IRanges(start = layer_res_bed$start ,end = layer_res_bed$end, names = layer_res_bed$chrom)
       
       found_dms <- overlapsAny(irang_layers, irang_true_pos)  ## FP are FALSE here
-      results_stats$FP[test_num] <- length(which(!found_dms)) / length(found_dms) ## FP proportion
+    #  results_stats$FP[test_num] <- length(which(!found_dms)) / length(found_dms) ## FP proportion
+      layer_result$true_pos <- found_dms
       
       true_dms <- overlapsAny(irang_true_pos, irang_layers)  ## FN are FALSE here
-      results_stats$FN[test_num] <- length(which(!true_dms)) / length(true_dms)  # FN rate
+ #     results_stats$FN[test_num] <- length(which(!true_dms)) / length(true_dms)  # FN rate
+      randbed$found <- true_dms
       
+      #### PRECISION RECALL MEASUREMENT HERE 
+      
+      sorted_result <- layer_result[order(-layer_result$unsigned_bin_score),] ## sort descending
+      precision_recall <- data.frame(
+        precision = rep(-1, nrow(sorted_result)),
+        recall = rep(-1, nrow(sorted_result))
+      )
+      for(i in 1:nrow(sorted_result)){
+        ## precision = TP / TP+FP 
+        ## recall = TP / TP+FN
+        temp_res_bed <- sorted_result[1:i, c(1,2,3)]
+        colnames(temp_res_bed) <- c("chrom","start", "end")
+        temp_res_iran <- IRanges(start = temp_res_bed$start ,end = temp_res_bed$end, names = temp_res_bed$chrom)
+        
+        called <- overlapsAny(temp_res_iran, irang_true_pos)  ## FP are FALSE here
+        tp <- length(which(called==TRUE))
+        tp_p_fp <- length(called)
+        precision_recall$precision[i] <- tp / tp_p_fp
+        
+        all_real <- overlapsAny(irang_true_pos, temp_res_iran)  ## FN are FALSE here
+        precision_recall$recall[i] <- length(which(all_real == TRUE)) / length(all_real)
+      }
+      precision_recall
+      plot(precision_recall$precision,precision_recall$recall)
       ##
     
+      library(MESS)
+      precision_recall<-rbind(precision_recall, c(0,max(precision_recall$recall)))
+      auc(precision_recall$precision,precision_recall$recall)
+      
+      ### AUC 
     }
+  )
     all_results[[paste(name,element, sep = "_")]] <- results_stats
   }  
   )

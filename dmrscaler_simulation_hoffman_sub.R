@@ -75,7 +75,7 @@ results_stat <- data.frame(delta_beta=delta_beta,
                            dmr_count=n_promoters,
                            meanFP=0, stdevFP=0, meanFN=0, stdevFN=0 )
 result_file <- paste("deltaB", delta_beta,"noise",noise, "num_samples",num_cases, "dmr_count", n_promoters, sep = "_")
-result_file <- paste(results_dir, result_file, ".csv", sep = "")
+result_file <- paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/", result_file, ".csv", sep = "")
 
 for(test_num in 1:nrows) {
   
@@ -218,6 +218,6 @@ results_stat$meanFN <- mean(results_stats$FN)
 results_stat$stdevFN <- sd(results_stats$FN)
 
 
-write.csv(result_file, results_stat)
+write.csv(results_stat, result_file)
 #}  
 

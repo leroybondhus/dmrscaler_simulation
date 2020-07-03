@@ -4,6 +4,7 @@ library(roxygen2)
 library(minfi)
 library(doParallel)
 library(rlang)
+library(MESS)
 
 library("valr")
 library(IRanges)
@@ -15,6 +16,8 @@ promoterInfo<-read.csv("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/int
 document("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
 install("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
 
+results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results/")
+
 
 controlBetaMatrix<-read.csv("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Beta_Matrix.csv",row.names = 1)
 controlCGlocs<-read.csv("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_CG_locs.csv",row.names = 1)
@@ -22,6 +25,8 @@ controlPhenoData<-read.csv("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation
 #subset the control beta matrix for cpgs from chr5
 controlCGlocs<-controlCGlocs[controlCGlocs$V3=="chr5",]
 controlBetaMatrix<-controlBetaMatrix[rownames(controlBetaMatrix)%in%controlCGlocs$V1,]
+
+promoterInfo <- promoterInfo[which(is.element(promoterInfo$Name, rownames(controlBetaMatrix))),]
 
 ############################      Set up data      ############################
 all_results <- list() 
@@ -56,32 +61,94 @@ for(name in names(pars)){
                                  noise=rep(noise, nrows),
                                  num_samples=rep(num_cases, nrows),
                                  dmr_count=rep(n_promoters, nrows),
-                                 FP=rep(-1, nrows),
-                                 FN=rep(-1, nrows),
-                                 Jaccard=rep(-1, nrows))
-                                 
+                                 auc=rep(-1, nrows),
 #                                 FP=numeric(length = nrows),
 #                                 FN=numeric(length = nrows),
-#                                 Jaccard=numeric(length = nrows))
+                                 jaccard=rep(-1, nrows))
   try(
     for(test_num in 1:nrows) {
       
       ### Angela's Code
+      run_prom <- FALSE  ## FALSE means run rand
       twogroups <- randomizeTwoGroups(controlBetaMatrix)
-      randprom <- randomizeSelectRegions(x=promoterInfo, n=n_promoters)
-      randbed <- bedForRegions(randprom)
-      randcgs <- cpgTableForRegions(randprom)
-      randcgs_dropped <- randcgs[sample(1:nrow(randcgs), size = floor(noise*nrow(randcgs))),]
-      randcgs  <- randcgs[setdiff(randcgs$Name,randcgs_dropped$Name),]
+      
+      if(run_prom){
+        randprom <- randomizeSelectRegions(x=promoterInfo, n=n_promoters)
+        randbed <- bedForRegions(randprom)
+        randcgs <- cpgTableForRegions(randprom)
+        randcgs_dropped <- randcgs[sample(1:nrow(randcgs), size = floor(noise*nrow(randcgs))),]
+        randcgs  <- randcgs[setdiff(randcgs$Name,randcgs_dropped$Name),]
+      } else{
+        
+          # fixed width
+        if(FALSE){ # fixed cg count
+          a <- sort(sample(1:(length(promoterInfo$Name)-50), 50))
+          b <- a + (1:50)   ## define dmrs of length 1+[1, 2, 3, 4, 5, ..., 50]
+          rand_dmrs <- IRanges(start=a, end=b, names = rep("chr5", length(a)) )
+          rand_dmrs <- reduce(rand_dmrs)
+          dist_to_next <- rand_dmrs@start[2:length(rand_dmrs)] - (rand_dmrs@start[1:(length(rand_dmrs)-1)]+rand_dmrs@width[1:(length(rand_dmrs)-1)])
+          which(dist_to_next < 50)
+          rand_dmrs <- rand_dmrs[-which(dist_to_next < 50)]   ## drop dmrs that are too close to one another
+
+          randcgs <- data.frame(matrix(ncol = 4, nrow = 0))
+          colnames(randcgs) <- c("Name", "chr", "pos", "Islands_Name")
+          ### give things same names as in angela's code...
+          for(dm_index in 1:length(rand_dmrs)){
+            temp <- promoterInfo[ start(rand_dmrs)[dm_index]:end(rand_dmrs)[dm_index], c( "Name", "chr", "pos") ]
+            temp$Islands_Name <- as.character(rep(dm_index, nrow(temp)))
+           # temp$Islands_Name <- paste("name_", temp$Islands_Name, sep = "")
+            randcgs <- rbind(randcgs, temp)
+          } 
+          randbed <- data.frame(matrix(ncol = 4, nrow = 0))
+          randbed <- data.frame(chr=rep("chr5", length(rand_dmrs)), start = promoterInfo[start(rand_dmrs), "pos"], stop = promoterInfo[end(rand_dmrs), "pos"])
+          #colnames(randbed) <- c("Islands_Name", chr, start, stop)
+        }
+          
+          if(TRUE){ ## fixed length
+            width <- 1e5
+            a <- sort(sample(promoterInfo$pos, 50))
+            rand_dmrs <- IRanges(start=a, end=a+width-1, names = rep("chr5", length(a)) )
+            rand_dmrs <- reduce(rand_dmrs)
+            dist_to_next <- rand_dmrs@start[2:length(rand_dmrs)] - (rand_dmrs@start[1:(length(rand_dmrs)-1)]+rand_dmrs@width[1:(length(rand_dmrs)-1)])
+            
+            rand_dmrs_drop <- rep(FALSE,length(rand_dmrs))
+            ### drop dmrs if <3 cgs, if width is changed by overlapping others, if distance between dmrs is not at least 1 dmr width
+            for(dm_index in 1:length(rand_dmrs)){
+              which <- which((promoterInfo$pos >= start(rand_dmrs)[dm_index]) & (promoterInfo$pos <= end(rand_dmrs)[dm_index]))
+              if( (length(which) < 3) | (rand_dmrs@width[dm_index] != width) | (dm_index > length(dist_to_next)) | (dist_to_next[dm_index] < width) ){rand_dmrs_drop[dm_index] <- TRUE} # require 3 CGs for dmr
+            } 
+            rand_dmrs<-rand_dmrs[-which(rand_dmrs_drop),]
+            
+            randcgs <- data.frame(matrix(ncol = 4, nrow = 0))
+            colnames(randcgs) <- c("Name", "chr", "pos", "Islands_Name")            
+            for(dm_index in 1:length(rand_dmrs)){
+              which <- which((promoterInfo$pos >= start(rand_dmrs)[dm_index]) & (promoterInfo$pos <= end(rand_dmrs)[dm_index]))
+              temp <- promoterInfo[ which, c( "Name", "chr", "pos") ]
+              temp$Islands_Name <- as.character(rep(dm_index, nrow(temp)))
+              # temp$Islands_Name <- paste("name_", temp$Islands_Name, sep = "")
+              randcgs <- rbind(randcgs, temp)
+            }
+            randcgs_dropped <- randcgs[sample(1:nrow(randcgs), size = floor(noise*nrow(randcgs))),]
+            randcgs  <- randcgs[setdiff(randcgs$Name,randcgs_dropped$Name),]
+            
+            randbed <- data.frame(matrix(ncol = 4, nrow = 0))
+            randbed <- data.frame(chr=rep("chr5", length(rand_dmrs)), start = start(rand_dmrs) , stop = end(rand_dmrs))
+            
+                        
+          }
+      }
+      
+      
+      
       
       simulatedbeta <- alterByMu(mu=delta_beta, betaMatrix = controlBetaMatrix, expDesign = twogroups, cpgTable = randcgs)
       
-      # ### quick visual test 
-      # temp <- rowMeans(simulatedbeta[,twogroups[twogroups$group=="A","sampleID"]])-rowMeans(simulatedbeta[,twogroups[twogroups$group=="Aprime","sampleID"]])
-      # hist(temp, breaks = 50)
-      # temp <- controlBetaMatrix-simulatedbeta
-      # hist(as.vector(as.matrix(temp)), breaks = 50)
-      # ###
+      ### quick visual test
+      temp <- rowMeans(simulatedbeta[,twogroups[twogroups$group=="A","sampleID"]])-rowMeans(simulatedbeta[,twogroups[twogroups$group=="Aprime","sampleID"]])
+      hist(temp, breaks = 50)
+      temp <- controlBetaMatrix-simulatedbeta
+      hist(as.vector(as.matrix(temp)), breaks = 50)
+      ###
       
       
       all_case <- which(is.element(colnames(simulatedbeta), twogroups[twogroups$group=="A","sampleID"]))
@@ -168,34 +235,36 @@ for(name in names(pars)){
       ## 
       ## jaccard
       
-
+  
+      layer_num = 1
+      layer_result <- built_layers[[layer_num]]
       
-      layer_result <- built_layers[[6]]
-      layer_res_bed <- layer_result[,1:3]
+      
+
+      irang_true_pos <- IRanges(start = as.numeric(randbed$start) ,end = as.numeric(randbed$stop), names = randbed$chr)
+     # irang_true_pos <- IRanges(start = randbed_true_pos$start ,end = randbed_true_pos$end, names = randbed_true_pos$chrom)
+      irang_layers <- IRanges(start = layer_result$start_pos ,end = layer_result$stop_pos, names = layer_result$chr)
+      
+      found_dms <- overlapsAny(irang_layers, irang_true_pos)  ## FP are FALSE here
+      layer_result$true_pos <- found_dms
+      true_dms <- overlapsAny(irang_true_pos, irang_layers)  ## FN are FALSE here
+      randbed$found <- true_dms
+
+      layer_res_bed <- layer_result[which(layer_result$true_pos),1:3]
       colnames(layer_res_bed) <- c("chrom","start", "end")
       layer_res_bed <- tbl_interval(layer_res_bed)
       layer_res_bed$chrom <- as.character(layer_res_bed$chrom)
       
-      randbed_true_pos <- randbed[,2:4]
+      randbed_true_pos <- randbed[which(randbed$found),c("chr","start","stop")]
       colnames(randbed_true_pos) <- c("chrom","start", "end")
-      randbed_true_pos<-tbl_interval(randbed_true_pos)
+      
+      randbed_true_pos <- tbl_interval(randbed_true_pos)
       randbed_true_pos$chrom <- as.character(randbed_true_pos$chrom)
       randbed_true_pos$start <- as.numeric(randbed_true_pos$start)
       randbed_true_pos$end <- as.numeric(randbed_true_pos$end)
       
-      results_stats$Jaccard[test_num] <- bed_jaccard(x=layer_res_bed, y=randbed_true_pos)$jaccard
-      ###
-      irang_true_pos <- IRanges(start = randbed_true_pos$start ,end = randbed_true_pos$end, names = randbed_true_pos$chrom)
-      irang_layers <- IRanges(start = layer_res_bed$start ,end = layer_res_bed$end, names = layer_res_bed$chrom)
-      
-      found_dms <- overlapsAny(irang_layers, irang_true_pos)  ## FP are FALSE here
-    #  results_stats$FP[test_num] <- length(which(!found_dms)) / length(found_dms) ## FP proportion
-      layer_result$true_pos <- found_dms
-      
-      true_dms <- overlapsAny(irang_true_pos, irang_layers)  ## FN are FALSE here
- #     results_stats$FN[test_num] <- length(which(!true_dms)) / length(true_dms)  # FN rate
-      randbed$found <- true_dms
-      
+      results_stats$jaccard[test_num] <- bed_jaccard(x=layer_res_bed, y=randbed_true_pos)$jaccard    
+  
       #### PRECISION RECALL MEASUREMENT HERE 
       
       sorted_result <- layer_result[order(-layer_result$unsigned_bin_score),] ## sort descending
@@ -219,17 +288,21 @@ for(name in names(pars)){
         precision_recall$recall[i] <- length(which(all_real == TRUE)) / length(all_real)
       }
       precision_recall
-      plot(precision_recall$precision,precision_recall$recall)
+      plot(precision_recall$recall,precision_recall$precision)
       ##
     
-      library(MESS)
+
       precision_recall<-rbind(precision_recall, c(0,max(precision_recall$recall)))
-      auc(precision_recall$precision,precision_recall$recall)
-      
+      auc <- auc(precision_recall$recall, precision_recall$precision)
+      results_stats$auc[test_num] <- auc
       ### AUC 
     }
   )
+    result_file <- paste("deltaB", delta_beta,"noise",noise, "num_samples",num_cases, "dmr_count", n_promoters, "layerCGcount", layer_sizes[layer_num] ,  sep = "_")
+    result_file <- paste(results_dir, result_file, ".csv", sep = "")
+    write.csv( results_stats, file = result_file)
     all_results[[paste(name,element, sep = "_")]] <- results_stats
-  }  
+  }
+
   )
 }

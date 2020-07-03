@@ -100,11 +100,12 @@ cpgTableForRegions<-function(randRegions){
 #return:
 #betaMatrix, a matrix type but inflated(or deflated) by mu at the randomly selected regions
 alterByMu<-function(mu,betaMatrix,expDesign, cpgTable){
+  betaMatrix<-as.matrix(betaMatrix)
   for (i in unique(cpgTable$Islands_Name)) {
-    #print(i)
+    print(i)
     currentCpGtable<-cpgTable[cpgTable$Islands_Name==i,]
     if(nrow(currentCpGtable) <= 1){ next;}
-    betaMatrix<-as.matrix(betaMatrix)
+    
     
     avgBeta_A<-mean( betaMatrix[which(is.element(rownames(betaMatrix), rownames(currentCpGtable))),
                                 which(is.element(colnames(betaMatrix), expDesign[expDesign$group=="A","sampleID"]))]  )

@@ -1,0 +1,109 @@
+---
+title: "dmrscaler_simulation_mapping_data_prep"
+author: "Leroy_Bondhus"
+date: "July 28, 2020"
+output: html_document
+---
+
+```{r}
+library("devtools")
+library(roxygen2)
+
+
+library(minfi)
+library(doParallel)
+library(rlang)
+library(MESS)
+
+library("valr")
+library(IRanges)
+registerDoParallel()
+
+
+library("sva")
+library("minfiData")
+library("minfi")
+library("IlluminaHumanMethylationEPICmanifest") ###### NOTE hg19 is used IlluminaHumanMethylation450kanno.ilmn.hg19
+                                                ###### NOTE New mapping is used:
+                                                ######                   IlluminaHumanMethylationEPICanno.ilm10b4.hg19
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+
+document("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
+install("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
+
+results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results/")
+```
+
+
+###  Reading of idat files done with minfi library ###
+```{r read_data}
+idats_dir<-"/home/lbondhus/Desktop/STABLE_DATA/GSE74432/idat"
+idats_files<-list.files(path=idats_dir, pattern = "*.idat")
+targets <- read.metharray.sheet("/home/lbondhus/Desktop/STABLE_DATA/GSE74432/data_table/", pattern = "Formatted_Sample_Table", verbose = TRUE)
+targets$Basename<-paste(targets$Sample_Name, "_", targets$Slide, "_", targets$Array, sep = "")  
+#Extract only KAT6A patients and Controls for analysis
+#targets=targets[c(grep("^CONTROL",targets$Sample_Name),grep("^KAT6",targets$Sample_Name)),]
+RGSet <- read.metharray.exp(base = idats_dir, targets = targets)
+rm(idats_dir, idats_files, targets)
+```
+
+###  Processing done with minfi library  ###
+```{r process idats}
+#manifest <- getManifest(RGSet)
+GRset.funnorm <- preprocessFunnorm(RGSet);rm(RGSet)
+snps <- getSnpInfo(object = GRset.funnorm)
+GRset.funnorm <- dropLociWithSnps(GRset.funnorm, snps=c("SBE", "CpG"), maf=0);rm(snps)
+#dropLociWithSnps removed 30k elements of the 866k elements to 836k elements
+```
+
+### Check that sex matches ###
+```{r sex_QC} 
+pdat <- pData(GRset.funnorm)
+predictedSex <- getSex(GRset.funnorm, cutoff = -2)$predictedSex
+plotSex(getSex(GRset.funnorm, cutoff = -2))
+pdat$Sex[which(pdat$Sex==" female")] <- "F"
+pdat$Sex[which(pdat$Sex==" male")] <- "M"
+C <- matrix(c(pdat$Sex, predictedSex,(pdat$Sex == predictedSex), pdat$Basename), nrow = length(pdat$Sex), ncol=4);C
+rm(C, predictedSex)
+```
+
+
+### To remove largest sex biases, X and Y signals removed ###
+### NOTE: Still may be sex bias in data                   ###
+### NOTE: If samples v control can be partitioned on M/F  ###
+###       it would be worth while to run separtate tests  ###
+###       and include X and Y                             ###    
+```{r Remove_XY_Chromosomes}
+#REMOVE X and Y CHROMOSOME PROBES!!
+cut_from_end<-GRset.funnorm@rowRanges@seqnames@lengths[which(GRset.funnorm@rowRanges@seqnames@values=="chrX")] +
+GRset.funnorm@rowRanges@seqnames@lengths[which(GRset.funnorm@rowRanges@seqnames@values=="chrY")]
+if(length(cut_from_end)==0){cut_from_end=0}
+#GRset.funnorm.with_X_Y<-GRset.funnorm ## uncomment if X and Y are desired
+GRset.funnorm<-GRset.funnorm[1:(length(GRset.funnorm)-as.numeric(cut_from_end)),]
+rm(cut_from_end)
+```
+
+```{r}
+
+controls<-which(pdat$Sample_Group==" Control" & pdat$X==" whole blood")
+B<-getBeta(GRset.funnorm)
+cB<-B[,controls]
+cP <-pdat[controls,]
+locs <- getLocations(GRset.funnorm)
+
+locs_df <- data.frame("names"=locs@ranges@NAMES, "pos"=locs@ranges@start, "chr" = rep(locs@seqnames@values, locs@seqnames@lengths))
+cdf <- as.data.frame(cP)
+```
+
+```{r Save Data Objects}
+save(GRset.funnorm, file="/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/GRset.funnorm_full.Rdata")
+
+write.csv(locs_df, file = "/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_CG_locs_full.csv")
+write.csv(cB, file="/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Beta_Matrix_full.csv")
+write.csv(cdf, file="/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Pheno_Data_full.csv")
+
+#save(mann_whitney_wilcox_results, file="/home/lbondhus/Desktop/PROJECTS/KAT6A_DNA_methylation_project/intermediate_data/mann_whitney_wilcox_results_NEW.Rdata")
+```
+

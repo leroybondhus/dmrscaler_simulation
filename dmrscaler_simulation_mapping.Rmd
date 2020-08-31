@@ -40,7 +40,7 @@ results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/result
 
 
 ```{r}
-simul_sc_tbl <- data.frame("min_cgs"=c(3,6,9,12), "size"=c(1e3,1e4,1e5,1e6), "count"=c(64,32,16,8) )
+simul_sc_tbl <- data.frame("min_cgs"=c(3,6,9,12), "size"=c(1e3,1e4,1e5,1e6), "count"=c(50,50,50,50) )
 ```
 
 
@@ -145,7 +145,8 @@ length(is.element(rownames(B_mod)[which(rowMeans(as.matrix(B_test))-rowMeans(as.
       
       ############################     run everything         #########################
       num_perm <- 10
-      clt_reps <- 5e5
+      #clt_reps <- 5e5
+      clt_reps <- 5e4
       
       rim <- dmrscaler::generate_rand_index_matrix(num_controls = length(g1),
                                                    num_cases = length(g2),
@@ -365,8 +366,10 @@ locs$neglog10pval <- mwr
 
 
 ```{r run_simulation_multiple times}
-WIDTH_PAIRS <- data.frame("simulated_width", "called_width")
-MAPPING_VALUES <-data.frame("mapping_value")
+WIDTH_PAIRS <- data.frame("simulated_width"=numeric(), "called_width"=numeric())
+MAPPING_VALUES <- data.frame("mapping_value"=numeric())
+BH_WIDTH_PAIRS <- data.frame("simulated_width"=numeric(), "called_width"=numeric())
+BH_MAPPING_VALUES <- data.frame("mapping_value"=numeric())
 
 for(RUN in 1:10){
         ## delta_beta = artificial inflation of beta values between groups
@@ -374,7 +377,7 @@ for(RUN in 1:10){
         ## noise = proportion of cgs in DMR that are not to have an altered beta value
         ## dmr_buffer = number of non-dmr cgs to enforce between each artificial dmr
         
-        pars <- data.frame("delta_beta" = 0.2, "num_samples" = 10, "noise" = 0.5, "dmr_buffer" = 10) 
+        pars <- data.frame("delta_beta" = 0.2, "num_samples" = 8, "noise" = 0.5, "dmr_buffer" = 10) 
         
         
         
@@ -455,7 +458,7 @@ for(RUN in 1:10){
               
               ############################     run everything         #########################
               num_perm <- 10
-              clt_reps <- 5e5
+              clt_reps <- 5e4
               
               rim <- dmrscaler::generate_rand_index_matrix(num_controls = length(g1),
                                                            num_cases = length(g2),
@@ -536,6 +539,7 @@ for(RUN in 1:10){
                                                       CG_table = atomic_layer,
                                                       FDR_scaler=fdrscaler,
                                                       lookup_table = cltable)
+                built_layers[[i]]<- in_layer_merge(dmrs = built_layers[[i]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
                # print("done with one")
               }
         
@@ -567,12 +571,14 @@ for(RUN in 1:10){
           ranges = IRanges(start = called_dmrs$start_pos, end = called_dmrs$stop_pos, names = temp_names),
           strand = rep("*", nrow(called_dmrs))
         )
+      
         
         ## basis for generating simul_length vs called_length plot
         overlaps <- findOverlaps(simul_grs, called_grs)
         plot(log10(simul_grs@ranges@width[overlaps@from]), log10(called_grs@ranges@width[overlaps@to]))
         cor( log10(simul_grs@ranges@width[overlaps@from]),log10(called_grs@ranges@width[overlaps@to]))
         ### write pairs of simul_width and called_width. To plot: plot log10 transformed widths  
+        WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("simulated_width"=simul_grs@ranges@width[overlaps@from], "called_width"=called_grs@ranges@width[overlaps@to]))
         
         ############################################
         
@@ -595,8 +601,10 @@ for(RUN in 1:10){
           if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
           else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
         }
-        ### save count_called_per_simul vector. To plot : density of log10 values.
         
+        
+        ### save count_called_per_simul vector. To plot : density of log10 values.
+        MAPPING_VALUES <- rbind(MAPPING_VALUES, data.frame("mapping_values"= unname(count_called_per_simul)))
         ################################
         
         
@@ -604,9 +612,282 @@ for(RUN in 1:10){
         ####  trim edge to improve
         #### 
 
+                            ##   BUMPHUNTER  ##
+        design<-rep(-1,length(colnames(B_mod)))
+        design[which(is.element(colnames(B_mod),g1))]<-1
+        design<-cbind(rep(1,length(colnames(B_mod) ) ), design )
+        bumps4 <- bumphunter(B_mod,as.matrix(design),chr = locs$chr, pos=locs$pos, cutoff=0.1, maxGap=1e6, B=250, smoothFunction=loessByCluster )
+        temp_names <- paste("called", bumps4$table$chr, bumps4$table$start, sep = "_")
+        bh_called_grs <- GRanges(
+          seqnames = bumps4$table$chr,
+          ranges = IRanges(start = bumps4$table$start, end = bumps4$table$end, names = temp_names),
+          strand = rep("*", nrow(bumps4$table))
+        )
+        bh_overlaps <- findOverlaps(simul_grs, bh_called_grs)
+        plot(log10(simul_grs@ranges@width[bh_overlaps@from]), log10(bh_called_grs@ranges@width[bh_overlaps@to]))
+        BH_WIDTH_PAIRS <- rbind(BH_WIDTH_PAIRS, data.frame("simulated_width"=simul_grs@ranges@width[bh_overlaps@from], "called_width"= bh_called_grs@ranges@width[bh_overlaps@to] ))
+        
+        
+         ##### one-to-one, many-to-one, one-to-many plot setup   MAY NEED TO UPDATE
+        overlaps_count_simul <- countOverlaps( simul_grs, bh_called_grs)
+        overlaps_count_simul 
+        
+        overlaps_count_called <- countOverlaps( bh_called_grs, simul_grs)
+        overlaps_count_called
+        overlap_count_called_df <- data.frame("names"=names(overlaps_count_called), "overlap_counts" = overlaps_count_called) 
+        
+        count_called_per_simul <- vector(length = length(simul_grs) )
+        names(count_called_per_simul) <- simul_grs@ranges@NAMES
+        
+        for(i in 1:length(simul_grs)){
+          if(!is.element(i, bh_overlaps@from)){ count_called_per_simul[i] <- 0; next;}
+          which <- which(bh_overlaps@from==i)  ## select rows of overlaps corresponding to simulated dmr
+          max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which,"overlap_counts"])
+          if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
+          else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
+        }
+        
+        
+        BH_MAPPING_VALUES <- rbind(BH_MAPPING_VALUES, data.frame("mapping_values"= unname(count_called_per_simul)))
+        
+        
+        
+        ################################
+        ####
+        
+        
+        ##dmrcate##
+        
+        ####
+        
+        
+        
 }
+write.csv(WIDTH_PAIRS, file = "./results/08122020_WIDTH_PAIRS.csv")
+write.csv(MAPPING_VALUES, file = "./results/08122020_MAPPING_VALUES.csv")
+
+hist(log10(WIDTH_PAIRS$simulated_width))
+plot(log10(WIDTH_PAIRS$simulated_width),log10(WIDTH_PAIRS$called_width))
+a<-mean(log10(WIDTH_PAIRS$called_width))
+plot((log10(WIDTH_PAIRS$simulated_width)), (log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) ) )
+
+1- (sum((log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) )^2 ) /sum((log10(WIDTH_PAIRS$called_width)-a)^2 )) ## R squared
+
 ```
 
 
+```{r}
+
+LOG_WIDTH_PAIRS <- WIDTH_PAIRS
+LOG_WIDTH_PAIRS$simulated_width <- log10(WIDTH_PAIRS$simulated_width)
+LOG_WIDTH_PAIRS$called_width <- log10(WIDTH_PAIRS$called_width)
+
+png(filename = "./results/08122020_Draft_Simul_v_Called_DMR_LenVLen_MappingRatios.png", width = 2000, height=400)
+
+gg1 <- ggplot(MAPPING_VALUES, aes(x=mapping_values))+
+  geom_histogram(bins = 40)+
+  ggtitle("histogram of simulated to called dmr ratio")+
+    theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+gg2 <- ggplot(MAPPING_VALUES, aes(x=log10(mapping_values)))+
+  geom_histogram(aes(y=..density..),alpha=0.3, bins = 60)+
+  geom_density()+
+  ggtitle("density plot of log10 simulated to called dmr ratio")+
+  xlim(-2,2)+
+    theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+gg3 <- ggplot(LOG_WIDTH_PAIRS, aes(x=simulated_width, y=called_width)) +
+  geom_point(size=0.1, alpha=0.8)+
+  ggtitle("simulated v called dmr length log10")+
+    theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+gg4 <- ggplot(LOG_WIDTH_PAIRS, aes(x=simulated_width, y=called_width)) +
+  geom_bin2d(bins=70) +
+  ggtitle("simulated v called dmr length log10")+
+ # scale_fill_continuous(type="viridis")+
+    scale_fill_gradient(low="grey85", high="black")+
+  theme_bw()+
+    theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+gg5 <- ggplot(LOG_WIDTH_PAIRS, aes(x=simulated_width, y=called_width)) +
+  ggtitle("simulated v called dmr length log10")+
+  stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.6, alpha=0.8) +
+  geom_point(size=0.1, alpha=0.8)+
+ # scale_fill_continuous(type="viridis") +
+    scale_fill_gradient(low="grey85", high="black")+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+grid.arrange(gg1,gg2,gg3,gg4,gg5,ncol=5)
+dev.off()
+
+plot(LOG_WIDTH_PAIRS$simulated_width,LOG_WIDTH_PAIRS$called_width)
+cor(LOG_WIDTH_PAIRS$simulated_width,LOG_WIDTH_PAIRS$called_width)
+which<-which(LOG_WIDTH_PAIRS$simulated_width <= 4)
+plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+which<-which(LOG_WIDTH_PAIRS$simulated_width > 3 & LOG_WIDTH_PAIRS$simulated_width <= 5 )
+plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+which<-which(LOG_WIDTH_PAIRS$simulated_width > 4 & LOG_WIDTH_PAIRS$simulated_width <= 5 )
+plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+#cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+which<-which(LOG_WIDTH_PAIRS$simulated_width > 4)
+plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+
 
 ```
+
+
+```{r sex grouped}
+g1<-pdat$Basename[which(trimws(pdat$Sex)=="female")][1:8]
+g2<-pdat$Basename[which(trimws(pdat$Sex)=="male")][1:8]
+B<-as.matrix(B)
+              ############################     run everything         #########################
+              num_perm <- 10
+              clt_reps <- 5e4
+              
+              rim <- dmrscaler::generate_rand_index_matrix(num_controls = length(g1),
+                                                           num_cases = length(g2),
+                                                           num_permutations = num_perm)
+              mrp <- dmrscaler::run_MWW_rand_permutation(index_matrix = rim, 
+                                                         Beta = B,
+                                                         num_permutations = num_perm)
+              mrp <- -log10(mrp)
+              mwr <- dmrscaler::run_MWW(control_indices = which(is.element(colnames(B),g1)) ,
+                                        case_indices = which(is.element(colnames(B),g2)),
+                                        Beta = B)
+              mwr <- -log10(mwr)
+              fdt <- dmrscaler::write_FDR_table(real_table = mwr,
+                                                rand_table = mrp)
+              
+              fdrscaler <- dmrscaler::get_FDR_scalar(MWW_FDR_table = fdt,
+                                                     MWW_FDR_threshold = 0.1)
+              if(is.na(fdrscaler)){fdrscaler <- 1}
+              cltable <- dmrscaler::write_CLT_lookup_table(num_reps = clt_reps ,
+                                                           data_to_sample = mwr$p_val,
+                                                           FDR_scaler = fdrscaler,
+                                                           clt_numCGs = c(2, 5, 10, 25, 50))
+              ## data <-  names, chr, pos,  scoring_value (-log10pval)
+            #  data <- controlCGlocs
+              data <- locs[,1:3]
+              data$chr <- as.factor(data$chr)
+              colnames(data)<-c("names","pos","chr")
+              data$scoring_values <- mwr$p_val
+            #  data$chr <- droplevels(data$chr)
+              layer_sizes <- c(2,4,8,16,32,64)
+              layers<-list()
+              for(i in 1:length(layer_sizes)){
+                print(paste("layer", i, sep="_"))
+                nn_step_fraction = 2 
+                nn_step_size <- floor(layer_sizes[i] / nn_step_fraction)
+                nn <- dmrscaler::n_nearest_window_scoring_func(indat = data, n_nearest = layer_sizes[i], step_size = nn_step_size, FDR = fdrscaler)
+                signn <- dmrscaler::determine_significant_windows(window_results=nn, indat=data, quants=cltable , quants_significance_cutoff = "0.9999" )
+                signn <- dmrscaler::add_significance(three_window_list =  signn, lookup_table = cltable)
+                
+                ## multiple chromosomes each a list, coerce to single dataframe
+                signn <- bind_rows(signn)
+                ## 
+                
+                layers[[i]]<-signn
+              }
+              
+              layers_TEMP_BACKUP <- layers
+              layers<-layers_TEMP_BACKUP
+              
+              names(layers)<-paste("layer", layer_sizes, sep="_")
+              
+              # for(i in 1:length(layers)){
+              #   temp<-as.data.frame(layers[[i]][[1]])
+              #  # print(length(layers[[i]]))
+              #   if(length(layers[[i]]) <= 1){ 
+              #   layers[[i]]<-temp
+              #   next
+              #   }
+              #   for(j in 2:length(layers[[i]])){
+              #     temp<-rbind(temp, layers[[i]][[j]])
+              #   }
+              #   layers[[i]]<-temp[[1]]
+              # }
+              
+              atomic_layer <- data
+              for(i in 1:length(layers)){
+                for(k in 1:length(layers[[i]]$start_pos)){
+                  layers[[i]]$start_index[k]<-which(atomic_layer$pos==layers[[i]]$start_pos[k] & as.character(atomic_layer$chr) == as.character(layers[[i]]$chr[k]))
+                  layers[[i]]$stop_index[k]<-which(atomic_layer$pos==layers[[i]]$stop_pos[k] & as.character(atomic_layer$chr) == as.character(layers[[i]]$chr[k]))
+                }
+              }
+              built_layers <- list()
+              built_layers[[1]] <- in_layer_merge(dmrs = layers[[1]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
+              for(i in 2:length(layers)){
+                #print(i)
+                built_layers[[i]] <- build_next_layer(prev_layer = built_layers[[i-1]], 
+                                                      windows_to_layer = layers[[i]], 
+                                                      CG_table = atomic_layer,
+                                                      FDR_scaler=fdrscaler,
+                                                      lookup_table = cltable)
+                built_layers[[i]]<- in_layer_merge(dmrs = built_layers[[i]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
+               # print("done with one")
+              }
+
+
+```
+
+```{r sex chrom analysis}
+
+library("chromPlot")
+data(hg_gap)
+hg_gap$Chrom<-paste("chr", hg_gap$Chrom, sep = "")
+chromPlot(gaps = hg_gap)
+data("hg_cytoBandIdeo")
+
+
+png(filename = "./results/sex_analysis_chroms.png")
+
+
+
+for(i in 1:length(sex_built_layers)){
+  png(filename = paste("./results/08172020_sex_analysis_chromX_", i, ".png", sep=""))
+  
+  sex_built_layers <- built_layers
+  sbl6 <- sex_built_layers[[i]] 
+  sbl6_2 <- data.frame("Chrom"=sbl6$chr, "Start"=sbl6$start_pos, "End"=sbl6$stop_pos, "Colors"="red", "ID"=paste(sbl6$chr,sbl6$start_pos, sep = "_"))
+  sbl6 <- data.frame("Chrom"=sbl6$chr, "Start"=sbl6$start_pos, "End"=sbl6$stop_pos, "Colors"="red")
+
+
+  chromPlot(bands = hg_cytoBandIdeo, gaps = hg_gap, segment=sbl6, stat = sbl6_2, figCols=3, statCol = "Value", statName = "Value", statTyp = "n", chr = c(1,2,"X"))
+  # chromPlot(bands = hg_cytoBandIdeo, gaps = hg_gap, segment=sbl6, stat = sbl6_2, statCol = "Value", statName = "Value", statTyp = "n", chr = "X")
+ #   chromPlot(bands = hg_cytoBandIdeo, gaps = hg_gap, segment=sbl6, figCols = 8, stat = sbl6, statCol = "Value", statName = "Value", statTyp = "n")
+  dev.off()
+
+}
+
+
+
+```
+

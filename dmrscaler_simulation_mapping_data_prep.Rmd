@@ -93,6 +93,8 @@ cB<-B[,controls]
 cP <-pdat[controls,]
 locs <- getLocations(GRset.funnorm)
 
+M<-getM(GRset.funnorm)
+cB<-B[,controls]
 locs_df <- data.frame("names"=locs@ranges@NAMES, "pos"=locs@ranges@start, "chr" = rep(locs@seqnames@values, locs@seqnames@lengths))
 cdf <- as.data.frame(cP)
 ```
@@ -103,7 +105,7 @@ save(GRset.funnorm, file="/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/i
 write.csv(locs_df, file = "/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_CG_locs_full.csv")
 write.csv(cB, file="/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Beta_Matrix_full.csv")
 write.csv(cdf, file="/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Pheno_Data_full.csv")
-
+write.csv(cB, file="/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_M_Matrix.csv")
 #save(mann_whitney_wilcox_results, file="/home/lbondhus/Desktop/PROJECTS/KAT6A_DNA_methylation_project/intermediate_data/mann_whitney_wilcox_results_NEW.Rdata")
 ```
 

@@ -597,7 +597,7 @@ for(RUN in 1:10){
           ranges = IRanges(start = called_dmrs$start_pos, end = called_dmrs$stop_pos, names = temp_names),
           strand = rep("*", nrow(called_dmrs))
         )
-      
+        called_grs$pval <- called_dmrs$unsigned_bin_score
         
         ## basis for generating simul_length vs called_length plot
         overlaps <- findOverlaps(simul_grs, called_grs)
@@ -632,7 +632,18 @@ for(RUN in 1:10){
           else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
         }
         
-        TP <- intersect( called_grs, simul_grs)##### write this....
+        ##Get TP FN values
+        TP <- numeric(length = length(simul_grs))
+        FN <- numeric(length = length(simul_grs))
+        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_overlap <- findOverlaps(simul_grs, cs_intersect )
+        for(i in 1:length(simul_grs)){
+          if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
+          which<-cs_overlap@to[which(cs_overlap@from==i)]
+          TP[i] <- sum(cs_intersect[which]@ranges@width) / simul_grs[i]@ranges@width
+          FN[i] <- 1 - TP[i]
+        }
+
         ### save count_called_per_simul vector. To plot : density of log10 values.
         MAPPING_VALUES <- rbind(MAPPING_VALUES, data.frame("method" = "DMRscaler",
                                                            "params" = "default" ,
@@ -640,21 +651,31 @@ for(RUN in 1:10){
                                                            "simul_start"=simul_dmrs$pos, 
                                                            "simul_width"=simul_dmrs$length,
                                                            "mapping_value"= unname(count_called_per_simul),
-                                                           "TP%"=,
-                                                           "FN%"=))
+                                                           "TP%"= TP,
+                                                           "FN%"= FN))
+        ##Get TP FP values
+        TP <- numeric(length = length(called_grs))
+        FP <- numeric(length = length(called_grs))
+        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_overlap <- findOverlaps(called_grs, cs_intersect )
+        for(i in 1:length(called_grs)){
+          if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
+          which<-cs_overlap@to[which(cs_overlap@from==i)]
+          TP[i] <- sum(cs_intersect[which]@ranges@width) / called_grs[i]@ranges@width
+          FP[i] <- 1 - TP[i]
+        }
         
+        CALLED_TP_FP <- rbind(CALLED_TP_FP, data.frame("method" = "DMRscaler",
+                                                       "params" = "default",
+                                                       "called_chr"=as.character(called_dmrs$chr),
+                                                       "called_start"=called_grs@ranges@start,
+                                                       "called_width"=called_grs@ranges@width,
+                                                       "TP%"= TP, 
+                                                       "FP%"= FP, 
+                                                       "pval"= called_grs$pval ))
 
-        WIDTH_PAIRS <- data.frame("method"=character(), "params"=character(),
-                          "simulated_width"=numeric(), "called_width"=numeric())
 
-MAPPING_VALUES <- data.frame("method"=character(), "params"=character(),
-                             "simul_chr"=character(), "simul_start"=numeric(), "simul_width"=numeric(),
-                             "mapping_value"=numeric(), "TP%"=numeric(), "FN%"=numeric())
 
-CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
-                             "called_chr"=character(), "called_start"=numeric(), "called_width"=numeric(),
-                             "TP%"=numeric(), "FP%"=numeric(), "pval"=numeric())
-       
         ################################
         
         
@@ -668,21 +689,26 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
         design<-cbind(rep(1,length(colnames(B_mod) ) ), design )
         bumps4 <- bumphunter(B_mod,as.matrix(design),chr = locs$chr, pos=locs$pos, cutoff=0.1, maxGap=1e6, B=250, smoothFunction=loessByCluster )
         temp_names <- paste("called", bumps4$table$chr, bumps4$table$start, sep = "_")
-        bh_called_grs <- GRanges(
+        called_grs <- GRanges(
           seqnames = bumps4$table$chr,
           ranges = IRanges(start = bumps4$table$start, end = bumps4$table$end, names = temp_names),
           strand = rep("*", nrow(bumps4$table))
         )
-        bh_overlaps <- findOverlaps(simul_grs, bh_called_grs)
-        plot(log10(simul_grs@ranges@width[bh_overlaps@from]), log10(bh_called_grs@ranges@width[bh_overlaps@to]))
-        BH_WIDTH_PAIRS <- rbind(BH_WIDTH_PAIRS, data.frame("simulated_width"=simul_grs@ranges@width[bh_overlaps@from], "called_width"= bh_called_grs@ranges@width[bh_overlaps@to] ))
-        
+        called_grs$pval <- bumps4$table$p.value
+        overlaps <- findOverlaps(simul_grs, called_grs)
+        plot(log10(simul_grs@ranges@width[overlaps@from]), log10(called_grs@ranges@width[overlaps@to]))
+        WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "bumphunter",
+                                             "params" = "maxGap=1e6,cutoff=0.1" ,
+                                             "simulated_width"=simul_grs@ranges@width[overlaps@from],
+                                             "called_width"=called_grs@ranges@width[overlaps@to]))
+
+
         
          ##### one-to-one, many-to-one, one-to-many plot setup   MAY NEED TO UPDATE
-        overlaps_count_simul <- countOverlaps( simul_grs, bh_called_grs)
+        overlaps_count_simul <- countOverlaps( simul_grs, called_grs)
         overlaps_count_simul 
         
-        overlaps_count_called <- countOverlaps( bh_called_grs, simul_grs)
+        overlaps_count_called <- countOverlaps( called_grs, simul_grs)
         overlaps_count_called
         overlap_count_called_df <- data.frame("names"=as.numeric(names(overlaps_count_called)), "overlap_counts" = overlaps_count_called) 
         
@@ -690,18 +716,56 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
         names(count_called_per_simul) <- simul_grs@ranges@NAMES
         
         for(i in 1:length(simul_grs)){
-          if(!is.element(i, bh_overlaps@from)){ count_called_per_simul[i] <- 0; next;}
-          which <- dmrcate_overlaps@to[which(dmrcate_overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
+          if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
+          which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
           max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which,"overlap_counts"])
           if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
           else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
         }
         
+                ##Get TP FN values
+        TP <- numeric(length = length(simul_grs))
+        FN <- numeric(length = length(simul_grs))
+        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_overlap <- findOverlaps(simul_grs, cs_intersect )
+        for(i in 1:length(simul_grs)){
+          if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
+          which<-cs_overlap@to[which(cs_overlap@from==i)]
+          TP[i] <- sum(cs_intersect[which]@ranges@width) / simul_grs[i]@ranges@width
+          FN[i] <- 1 - TP[i]
+        }
+
+        ### save count_called_per_simul vector. To plot : density of log10 values.
+        MAPPING_VALUES <- rbind(MAPPING_VALUES, data.frame("method" = "bumphunter",
+                                                           "params" = "maxGap=1e6,cutoff=0.1" ,
+                                                           "simul_chr"=simul_dmrs$chr, 
+                                                           "simul_start"=simul_dmrs$pos, 
+                                                           "simul_width"=simul_dmrs$length,
+                                                           "mapping_value"= unname(count_called_per_simul),
+                                                           "TP%"= TP,
+                                                           "FN%"= FN))
+        ##Get TP FP values
+        TP <- numeric(length = length(called_grs))
+        FP <- numeric(length = length(called_grs))
+        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_overlap <- findOverlaps(called_grs, cs_intersect )
+        for(i in 1:length(called_grs)){
+          if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
+          which<-cs_overlap@to[which(cs_overlap@from==i)]
+          TP[i] <- sum(cs_intersect[which]@ranges@width) / called_grs[i]@ranges@width
+          FP[i] <- 1 - TP[i]
+        }
         
-        BH_MAPPING_VALUES <- rbind(BH_MAPPING_VALUES, data.frame("mapping_value"= unname(count_called_per_simul)))
-        
-        
-        
+        CALLED_TP_FP <- rbind(CALLED_TP_FP, data.frame("method" = "bumphunter",
+                                                       "params" = "maxGap=1e6,cutoff=0.1" ,
+                                                       "called_chr"=as.character(called_grs@seqnames),
+                                                       "called_start"=called_grs@ranges@start,
+                                                       "called_width"=called_grs@ranges@width,
+                                                       "TP%"= TP, 
+                                                       "FP%"= FP, 
+                                                       "pval"= called_grs$pval  ))
+
+    
         ################################
         ####
         
@@ -718,14 +782,19 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
         myannotation <- cpg.annotate("array", object=M, what="M", arraytype = "450K", analysis.type = "differential", design = design,  coef = 2)
         
         dmrcate_results <- dmrcate(myannotation, lambda=1e6, C=2000)
-        dmrcate_results <- extractRanges(dmrcoutput = dmrcate_results, genome="hg19")
-        dmrcate_overlaps <- findOverlaps(simul_grs, dmrcate_results)
-        DMRCATE_WIDTH_PAIRS <- rbind(DMRCATE_WIDTH_PAIRS, data.frame("simulated_width"=simul_grs@ranges@width[dmrcate_overlaps@from], "called_width"= dmrcate_results@ranges@width[dmrcate_overlaps@to], "param_string"="lambda=1e6_C=2000" ))
+        called_grs <- extractRanges(dmrcoutput = dmrcate_results, genome="hg19")
+        called_grs$pval <- called_grs$Stouffer
+        overlaps <- findOverlaps(simul_grs, called_grs)
         
-        overlaps_count_simul <- countOverlaps( simul_grs, dmrcate_results)
+        WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "DMRcate",
+                                             "params" = "lambda=1e6_C=2000"  ,
+                                             "simulated_width"=simul_grs@ranges@width[overlaps@from],
+                                             "called_width"=called_grs@ranges@width[overlaps@to]))
+        
+        overlaps_count_simul <- countOverlaps( simul_grs, called_grs)
         overlaps_count_simul 
         
-        overlaps_count_called <- countOverlaps( dmrcate_results, simul_grs)
+        overlaps_count_called <- countOverlaps( called_grs, simul_grs)
         overlaps_count_called
         overlap_count_called_df <- data.frame("names"=as.numeric(names(overlaps_count_called)), "overlap_counts" = overlaps_count_called) 
         
@@ -734,33 +803,56 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
         
         for(i in 1:length(simul_grs)){
           print(i)
-          if(!is.element(i, dmrcate_overlaps@from)){ count_called_per_simul[i] <- 0; next;}
+          if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
           
-          which <- dmrcate_overlaps@to[which(dmrcate_overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
+          which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
           max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which(overlap_count_called_df$names==which),"overlap_counts"])
           
           if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
           else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
         }
         
-        DMRCATE_MAPPING_VALUES <- rbind(DMRCATE_MAPPING_VALUES, data.frame("mapping_value"= unname(count_called_per_simul), "param_string"="lambda=1e6_C=2000"))
+        ##Get TP FN values
+        TP <- numeric(length = length(simul_grs))
+        FN <- numeric(length = length(simul_grs))
+        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_overlap <- findOverlaps(simul_grs, cs_intersect )
+        for(i in 1:length(simul_grs)){
+          if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
+          which<-cs_overlap@to[which(cs_overlap@from==i)]
+          TP[i] <- sum(cs_intersect[which]@ranges@width) / simul_grs[i]@ranges@width
+          FN[i] <- 1 - TP[i]
+        }
+
+        ### save count_called_per_simul vector. To plot : density of log10 values.
+        MAPPING_VALUES <- rbind(MAPPING_VALUES, data.frame("method" = "DMRcate",
+                                                           "params" = "lambda=1e6_C=2000" ,
+                                                           "simul_chr"=simul_dmrs$chr, 
+                                                           "simul_start"=simul_dmrs$pos, 
+                                                           "simul_width"=simul_dmrs$length,
+                                                           "mapping_value"= unname(count_called_per_simul),
+                                                           "TP%"= TP,
+                                                           "FN%"= FN))
+        ##Get TP FP values
+        TP <- numeric(length = length(called_grs))
+        FP <- numeric(length = length(called_grs))
+        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_overlap <- findOverlaps(called_grs, cs_intersect )
+        for(i in 1:length(called_grs)){
+          if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
+          which<-cs_overlap@to[which(cs_overlap@from==i)]
+          TP[i] <- sum(cs_intersect[which]@ranges@width) / called_grs[i]@ranges@width
+          FP[i] <- 1 - TP[i]
+        }
         
-        
-        
-        
-        
-        
-        
-        
-        dmrcate_results_default <- dmrcate(myannotation, lambda=1e3, C=2)
-        dmrcate_results_default <- extractRanges(dmrcoutput = dmrcate_results_default, genome="hg19")
-        
-        dmrcate_overlaps <- findOverlaps(simul_grs, dmrcate_results_default)
-        DMRCATE_WIDTH_PAIRS <- rbind(DMRCATE_WIDTH_PAIRS, data.frame("simulated_width"=simul_grs@ranges@width[dmrcate_overlaps@from], "called_width"= dmrcate_results_1e6@ranges@width[dmrcate_overlaps@to], "param_string"="Default_lambda=1000_C=2" ) )
-        
-        
-        
-        
+        CALLED_TP_FP <- rbind(CALLED_TP_FP, data.frame("method" = "DMRcate",
+                                                       "params" = "lambda=1e6_C=2000" ,
+                                                       "called_chr"=as.character(called_grs@seqnames),
+                                                       "called_start"=called_grs@ranges@start,
+                                                       "called_width"=called_grs@ranges@width,
+                                                       "TP%"= TP, 
+                                                       "FP%"= FP, 
+                                                       "pval"= called_grs$pval  ))
         
         
         
@@ -770,15 +862,16 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
         
         
 }
-#write.csv(WIDTH_PAIRS, file = "./results/08122020_WIDTH_PAIRS.csv")
-#write.csv(MAPPING_VALUES, file = "./results/08122020_MAPPING_VALUES.csv")
+write.csv(WIDTH_PAIRS, file = "./results/10232020_WIDTH_PAIRS.csv")
+write.csv(MAPPING_VALUES, file = "./results/10232020_MAPPING_VALUES.csv")
+write.csv(CALLED_TP_FP, file = "./results/10232020_CALLED_TP_FP.csv")
 
-hist(log10(WIDTH_PAIRS$simulated_width))
-plot(log10(WIDTH_PAIRS$simulated_width),log10(WIDTH_PAIRS$called_width))
-a<-mean(log10(WIDTH_PAIRS$called_width))
-plot((log10(WIDTH_PAIRS$simulated_width)), (log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) ) )
+#hist(log10(WIDTH_PAIRS$simulated_width))
+#plot(log10(WIDTH_PAIRS$simulated_width),log10(WIDTH_PAIRS$called_width))
+#a<-mean(log10(WIDTH_PAIRS$called_width))
+#plot((log10(WIDTH_PAIRS$simulated_width)), (log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) ) )
 
-1- (sum((log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) )^2 ) /sum((log10(WIDTH_PAIRS$called_width)-a)^2 )) ## R squared
+#1- (sum((log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) )^2 ) /sum((log10(WIDTH_PAIRS$called_width)-a)^2 )) ## R squared
 
 ```
 

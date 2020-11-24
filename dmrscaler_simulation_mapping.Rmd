@@ -626,7 +626,7 @@ for(RUN in 1:10){
         
         for(i in 1:length(simul_grs)){
           if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
-          which <- which(overlaps@from==i)  ## select rows of overlaps corresponding to simulated dmr
+          which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
           max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which,"overlap_counts"])
           if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
           else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
@@ -862,9 +862,9 @@ for(RUN in 1:10){
         
         
 }
-write.csv(WIDTH_PAIRS, file = "./results/10232020_WIDTH_PAIRS.csv")
-write.csv(MAPPING_VALUES, file = "./results/10232020_MAPPING_VALUES.csv")
-write.csv(CALLED_TP_FP, file = "./results/10232020_CALLED_TP_FP.csv")
+#write.csv(WIDTH_PAIRS, file = "./results/10232020_WIDTH_PAIRS.csv")
+#write.csv(MAPPING_VALUES, file = "./results/10232020_MAPPING_VALUES.csv")
+#write.csv(CALLED_TP_FP, file = "./results/10232020_CALLED_TP_FP.csv")
 
 #hist(log10(WIDTH_PAIRS$simulated_width))
 #plot(log10(WIDTH_PAIRS$simulated_width),log10(WIDTH_PAIRS$called_width))
@@ -877,88 +877,57 @@ write.csv(CALLED_TP_FP, file = "./results/10232020_CALLED_TP_FP.csv")
 
 
 ```{r}
+dm_methods <- as.character(unique(WIDTH_PAIRS$method))
+date <- format(Sys.Date(), format="%Y_%m_%d")
 
-LOG_WIDTH_PAIRS <- WIDTH_PAIRS
-LOG_WIDTH_PAIRS$simulated_width <- log10(WIDTH_PAIRS$simulated_width)
-LOG_WIDTH_PAIRS$called_width <- log10(WIDTH_PAIRS$called_width)
+labels <- character(length = length(dm_methods))
+names(labels)<-dm_methods
+for(i in 1:length(dm_methods)){
+  which <- which(WIDTH_PAIRS$method == dm_methods[i])
+  cor <- cor(log10(WIDTH_PAIRS$simulated_width[which]), log10(WIDTH_PAIRS$called_width[which]))
+  labels[i] <- paste(dm_methods[i], " (Pearson's R = ", round(cor,2), ")", sep = "" )
+  names(labels[i])<-dm_methods[i]
+}
 
-png(filename = "./results/08122020_Draft_Simul_v_Called_DMR_LenVLen_MappingRatios.png", width = 2000, height=400)
+sp + facet_grid(. ~ sex, labeller=labeller(sex = labels))
 
-gg1 <- ggplot(MAPPING_VALUES, aes(x=mapping_values))+
-  geom_histogram(bins = 40)+
-  ggtitle("histogram of simulated to called dmr ratio")+
-    theme_bw()+
-  theme(
-    plot.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
 
-gg2 <- ggplot(MAPPING_VALUES, aes(x=log10(mapping_values)))+
-  geom_histogram(aes(y=..density..),alpha=0.3, bins = 60)+
-  geom_density()+
-  ggtitle("density plot of log10 simulated to called dmr ratio")+
-  xlim(-2,2)+
-    theme_bw()+
-  theme(
-    plot.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
-
-gg3 <- ggplot(LOG_WIDTH_PAIRS, aes(x=simulated_width, y=called_width)) +
-  geom_point(size=0.1, alpha=0.8)+
-  ggtitle("simulated v called dmr length log10")+
-    theme_bw()+
-  theme(
-    plot.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
-
-gg4 <- ggplot(LOG_WIDTH_PAIRS, aes(x=simulated_width, y=called_width)) +
-  geom_bin2d(bins=70) +
-  ggtitle("simulated v called dmr length log10")+
- # scale_fill_continuous(type="viridis")+
-    scale_fill_gradient(low="grey85", high="black")+
-  theme_bw()+
-    theme_bw()+
-  theme(
-    plot.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
-
-gg5 <- ggplot(LOG_WIDTH_PAIRS, aes(x=simulated_width, y=called_width)) +
-  ggtitle("simulated v called dmr length log10")+
-  stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.6, alpha=0.8) +
-  geom_point(size=0.1, alpha=0.8)+
- # scale_fill_continuous(type="viridis") +
-    scale_fill_gradient(low="grey85", high="black")+
+gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) +
+  #ggtitle("simulated v called dmr length log10")+
+  xlab("log10( Simulated DMR Width )")+
+  ylab("log10( Called DMR Width )")+
+ # stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.6, alpha=0.8) +
+  geom_point(size=0.01, alpha=0.4)+
+  scale_fill_gradient(low="grey85", high="black")+
   theme_bw()+
   theme(
     plot.background = element_blank(),
     panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
+    panel.grid.minor = element_blank(),
+    text=element_text(size=3),
+    strip.text = element_text(size=4, angle=0),
+    axis.text = element_text(face="bold", size=4, angle=0)
+  )+
+  facet_grid(. ~ method, labeller=labeller(method = labels))
+gg
 
-grid.arrange(gg1,gg2,gg3,gg4,gg5,ncol=5)
+filename<-paste(results_dir, date, "_ggsave_",  "sim_v_called_width.tiff", sep = "")
+tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+
+grid.arrange(gg, ncol=1)
 dev.off()
 
-plot(LOG_WIDTH_PAIRS$simulated_width,LOG_WIDTH_PAIRS$called_width)
-cor(LOG_WIDTH_PAIRS$simulated_width,LOG_WIDTH_PAIRS$called_width)
-which<-which(LOG_WIDTH_PAIRS$simulated_width <= 4)
-plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
-cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
-which<-which(LOG_WIDTH_PAIRS$simulated_width > 3 & LOG_WIDTH_PAIRS$simulated_width <= 5 )
-plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
-cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
-which<-which(LOG_WIDTH_PAIRS$simulated_width > 4 & LOG_WIDTH_PAIRS$simulated_width <= 5 )
-plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
-#cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
-which<-which(LOG_WIDTH_PAIRS$simulated_width > 4)
-plot(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
-cor(LOG_WIDTH_PAIRS$simulated_width[which],LOG_WIDTH_PAIRS$called_width[which])
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "tiff",
+  path = NULL,
+  scale = 1,
+  width = 4,
+  height = 2,
+  units = c("in"),
+  dpi = 320
+)
 
 
 ```

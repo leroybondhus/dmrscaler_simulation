@@ -1009,7 +1009,7 @@ for(m in unique(CALLED_TP_FP$method)){
                        width = temp_MV$simul_width),
       strand = rep("*", nrow(temp_MV))
     )
-  for(i in 1:nrow(temp)){
+  for(i in 1:nrow(temp)){   ### 1:i is going to slow things down... incremental operator?
     ## update Simul_TP_FN
     called_grs <- GRanges(
       seqnames = paste("r",temp$run[1:i], temp$called_chr[1:i],sep = "_"),
@@ -1044,6 +1044,29 @@ for(m in unique(CALLED_TP_FP$method)){
   
 
 
+df_temp <- data.frame()
+for(i in 1:length(P_R)){
+  df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(names(P_R)[i]))) 
+}
+
+gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
+  geom_path(aes(color=method))
+filename<-paste(results_dir, date, "_",  "AUCPR_bp.png", sep = "")
+#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+
+#grid.arrange(gg, ncol=1)
+#dev.off()
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 6,
+  height = 2.5,
+  units = c("in"),
+  dpi = 320
+)
 
 
 

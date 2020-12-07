@@ -378,15 +378,15 @@ locs$neglog10pval <- mwr
 
 ```{r run_simulation_multiple times}
 WIDTH_PAIRS <- data.frame("method"=character(), "params"=character(),
-                          "simulated_width"=numeric(), "called_width"=numeric())
+                          "simulated_width"=numeric(), "called_width"=numeric(), "run"=numeric())
 
 MAPPING_VALUES <- data.frame("method"=character(), "params"=character(),
                              "simul_chr"=character(), "simul_start"=numeric(), "simul_width"=numeric(),
-                             "mapping_value"=numeric(), "TP%"=numeric(), "FN%"=numeric())
+                             "mapping_value"=numeric(), "TP%"=numeric(), "FN%"=numeric(), "run"=numeric())
 
 CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
                              "called_chr"=character(), "called_start"=numeric(), "called_width"=numeric(),
-                             "TP%"=numeric(), "FP%"=numeric(), "pval"=numeric())
+                             "TP%"=numeric(), "FP%"=numeric(), "pval"=numeric(), "run"=numeric())
 
 
 
@@ -395,7 +395,7 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
 #DMRCATE_WIDTH_PAIRS <- data.frame("simulated_width"=numeric(), "called_width"=numeric(), "param_string"=character())
 #DMRCATE_MAPPING_VALUES <- data.frame("mapping_value"=numeric(), "param_string"=character())
 
-for(RUN in 1:10){
+for(RUN in 1:3){
         ## delta_beta = artificial inflation of beta values between groups
         ## num_samples = number of samples for each group
         ## noise = proportion of cgs in DMR that are not to have an altered beta value
@@ -607,7 +607,8 @@ for(RUN in 1:10){
         WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "DMRscaler",
                                                      "params" = "default" ,
                                                      "simulated_width"=simul_grs@ranges@width[overlaps@from],
-                                                     "called_width"=called_grs@ranges@width[overlaps@to]))
+                                                     "called_width"=called_grs@ranges@width[overlaps@to],
+                                                     "run"=RUN))
         
 
         ############################################
@@ -652,7 +653,8 @@ for(RUN in 1:10){
                                                            "simul_width"=simul_dmrs$length,
                                                            "mapping_value"= unname(count_called_per_simul),
                                                            "TP%"= TP,
-                                                           "FN%"= FN))
+                                                           "FN%"= FN,
+                                                           "run"=RUN))
         ##Get TP FP values
         TP <- numeric(length = length(called_grs))
         FP <- numeric(length = length(called_grs))
@@ -672,7 +674,8 @@ for(RUN in 1:10){
                                                        "called_width"=called_grs@ranges@width,
                                                        "TP%"= TP, 
                                                        "FP%"= FP, 
-                                                       "pval"= called_grs$pval ))
+                                                       "pval"= called_grs$pval,
+                                                       "run"=RUN))
 
 
 
@@ -700,7 +703,8 @@ for(RUN in 1:10){
         WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "bumphunter",
                                              "params" = "maxGap=1e6,cutoff=0.1" ,
                                              "simulated_width"=simul_grs@ranges@width[overlaps@from],
-                                             "called_width"=called_grs@ranges@width[overlaps@to]))
+                                             "called_width"=called_grs@ranges@width[overlaps@to],
+                                             "run"=RUN))
 
 
         
@@ -743,7 +747,8 @@ for(RUN in 1:10){
                                                            "simul_width"=simul_dmrs$length,
                                                            "mapping_value"= unname(count_called_per_simul),
                                                            "TP%"= TP,
-                                                           "FN%"= FN))
+                                                           "FN%"= FN,
+                                                           "run"=RUN))
         ##Get TP FP values
         TP <- numeric(length = length(called_grs))
         FP <- numeric(length = length(called_grs))
@@ -763,7 +768,8 @@ for(RUN in 1:10){
                                                        "called_width"=called_grs@ranges@width,
                                                        "TP%"= TP, 
                                                        "FP%"= FP, 
-                                                       "pval"= called_grs$pval  ))
+                                                       "pval"= called_grs$pval,
+                                                       "run"=RUN))
 
     
         ################################
@@ -789,7 +795,8 @@ for(RUN in 1:10){
         WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "DMRcate",
                                              "params" = "lambda=1e6_C=2000"  ,
                                              "simulated_width"=simul_grs@ranges@width[overlaps@from],
-                                             "called_width"=called_grs@ranges@width[overlaps@to]))
+                                             "called_width"=called_grs@ranges@width[overlaps@to],
+                                             "run"=RUN))
         
         overlaps_count_simul <- countOverlaps( simul_grs, called_grs)
         overlaps_count_simul 
@@ -832,7 +839,8 @@ for(RUN in 1:10){
                                                            "simul_width"=simul_dmrs$length,
                                                            "mapping_value"= unname(count_called_per_simul),
                                                            "TP%"= TP,
-                                                           "FN%"= FN))
+                                                           "FN%"= FN,
+                                                           "run"=RUN))
         ##Get TP FP values
         TP <- numeric(length = length(called_grs))
         FP <- numeric(length = length(called_grs))
@@ -852,7 +860,8 @@ for(RUN in 1:10){
                                                        "called_width"=called_grs@ranges@width,
                                                        "TP%"= TP, 
                                                        "FP%"= FP, 
-                                                       "pval"= called_grs$pval  ))
+                                                       "pval"= called_grs$pval,
+                                                       "run"=RUN))
         
         
         
@@ -877,8 +886,17 @@ for(RUN in 1:10){
 
 
 ```{r}
+WIDTH_PAIRS <- read.csv(file = "./results/10232020_WIDTH_PAIRS.csv")
+MAPPING_VALUES <- read.csv(file = "./results/10232020_MAPPING_VALUES.csv")
+CALLED_TP_FP <- read.csv(file = "./results/10232020_CALLED_TP_FP.csv")
+
+library(ggExtra)
+
 dm_methods <- as.character(unique(WIDTH_PAIRS$method))
 date <- format(Sys.Date(), format="%Y_%m_%d")
+
+
+## SIMULATED WIDTH V CALLED WIDTH PLOTS
 
 labels <- character(length = length(dm_methods))
 names(labels)<-dm_methods
@@ -889,45 +907,188 @@ for(i in 1:length(dm_methods)){
   names(labels[i])<-dm_methods[i]
 }
 
-sp + facet_grid(. ~ sex, labeller=labeller(sex = labels))
-
-
-gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) +
+gg <- ggplot(WIDTH_PAIRS[which(WIDTH_PAIRS$called_width > 1),], aes(x=log10(simulated_width), y=log10(called_width))) +
   #ggtitle("simulated v called dmr length log10")+
   xlab("log10( Simulated DMR Width )")+
   ylab("log10( Called DMR Width )")+
- # stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.6, alpha=0.8) +
+  stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
   geom_point(size=0.01, alpha=0.4)+
-  scale_fill_gradient(low="grey85", high="black")+
+  scale_fill_gradient(low="grey70", high="grey20")+
+  #scale_fill_gradient(low="white", high="red")+
   theme_bw()+
   theme(
     plot.background = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    text=element_text(size=3),
-    strip.text = element_text(size=4, angle=0),
-    axis.text = element_text(face="bold", size=4, angle=0)
+    text=element_text(face="bold", size=6),
+    strip.text = element_text(face="bold", size=6, angle=0),
+    axis.text = element_text(face="bold", size=6, angle=0),
+    legend.position = "none"
   )+
   facet_grid(. ~ method, labeller=labeller(method = labels))
 gg
 
-filename<-paste(results_dir, date, "_ggsave_",  "sim_v_called_width.tiff", sep = "")
-tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+filename<-paste(results_dir, date, "_ggsave666_",  "sim_v_called_width.tiff", sep = "")
+#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
-grid.arrange(gg, ncol=1)
-dev.off()
-
+#grid.arrange(gg, ncol=1)
+#dev.off()
 ggsave(
   filename=filename,
   plot = gg,
   device = "tiff",
   path = NULL,
   scale = 1,
-  width = 4,
-  height = 2,
+  width = 6,
+  height = 2.5,
   units = c("in"),
   dpi = 320
 )
 
 
+
+##  
+
+
+
+
+### MAPPING VALUES PLOT
+
+gg <- ggplot(MAPPING_VALUES[which(MAPPING_VALUES$simul_width<1e4),], aes(x=log10(mapping_value))) +
+  #ggtitle("simulated v called dmr length log10")+
+  #xlab("log10( Simulated DMR Width )")+
+  #ylab("log10( Called DMR Width )")+
+  #stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
+  geom_histogram()+
+  #scale_fill_gradient(low="grey70", high="grey20")+
+  #scale_fill_gradient(low="white", high="red")+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=6),
+    strip.text = element_text(face="bold", size=6, angle=0),
+    axis.text = element_text(face="bold", size=6, angle=0),
+    legend.position = "none"
+  )+
+  facet_grid(. ~ method, labeller=labeller(method = labels) )
+gg
+
+
+
 ```
+
+```{r AUCPR+ROC curves}
+## one measure raw bp length
+## one measure feature count
+
+## raw bp length
+
+P_R <- list() 
+for(m in unique(CALLED_TP_FP$method)){
+  which <- which(CALLED_TP_FP$method == m)
+  temp <- CALLED_TP_FP[which,]
+  temp_MV <- MAPPING_VALUES[which(MAPPING_VALUES$method==m),]
+  
+  if(m == "DMRscaler"){ temp$pval <- 10^(-temp$pval)} ## DMRscaler stored a score that is near mean -log10 pvalue, want to reverse order
+  temp <- temp[order(temp$pval),]
+  P_R[[m]]<-data.frame("P_feature"=numeric(length = nrow(temp)),
+                  "R_feature"=numeric(length = nrow(temp)),
+                  "P_bp"=numeric(length = nrow(temp)),
+                  "R_bp"=numeric(length = nrow(temp)))
+  Simul_TP_FN <- data.frame("TPfeature" = rep(0,nrow(temp_MV)) ,
+                          "FNfeature" = rep(1,nrow(temp_MV)),
+                          "TPbp" = rep(0,nrow(temp_MV)),
+                          "FNbp" = temp_MV$simul_width,
+                          "fullbp" = temp_MV$simul_width)
+  simul_grs <- GRanges(
+      seqnames = paste("r",temp_MV$run,
+                       temp_MV$simul_chr,sep = "_"),
+      ranges = IRanges(start = temp_MV$simul_start,
+                       width = temp_MV$simul_width),
+      strand = rep("*", nrow(temp_MV))
+    )
+  for(i in 1:nrow(temp)){
+    ## update Simul_TP_FN
+    called_grs <- GRanges(
+      seqnames = paste("r",temp$run[1:i], temp$called_chr[1:i],sep = "_"),
+      ranges = IRanges(start = temp$called_start[1:i], width = temp$called_width[1:i]),
+      strand = rep("*", nrow(temp[1:i,]))
+    )
+    cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+    cs_overlap <- findOverlaps(simul_grs, cs_intersect )
+    for(j in 1:length(simul_grs)){
+      if(!is.element(j, cs_overlap@from)){ TP[j] <- 0; FN[i] <- 1;  next;}
+      which2<-cs_overlap@to[which(cs_overlap@from==j)]
+      Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
+      Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
+      # Simul_TP_FN$FNfeature <- 1 - Simul_TP_FN$TPfeature
+    }
+    ##
+    Simul_TP_FN$FNfeature <- 1 - Simul_TP_FN$TPfeature
+    Simul_TP_FN$TPbp <- Simul_TP_FN$fullbp - (Simul_TP_FN$FNfeature * Simul_TP_FN$fullbp)
+    Simul_TP_FN$FNbp <- Simul_TP_FN$fullbp - Simul_TP_FN$TPbp
+    
+    P_R[[m]]$P_feature[i] <- mean(temp$TP.[1:i]) ##  TP/(TP+FP) where each feauture is equally weighted, TP+FP = 1/ called DMR, TP+FP = # DMR called
+    P_R[[m]]$R_feature[i] <- mean(Simul_TP_FN$TPfeature)
+    temp_TP_sum <- sum(temp$TP.[1:i] * temp$called_width[1:i])
+    temp_FP_sum <- sum(temp$FP.[1:i] * temp$called_width[1:i])
+    P_R[[m]]$P_bp[i] <- temp_TP_sum / (temp_TP_sum + temp_FP_sum )
+    P_R[[m]]$R_bp[i] <- sum(Simul_TP_FN$TPbp) / sum(Simul_TP_FN$fullbp)
+    
+    
+  }
+  
+}
+  
+
+
+
+
+
+```
+
+```{r supplemental figures}
+for(i in 1:length(dm_methods)){  
+  which<- which(WIDTH_PAIRS$method==dm_methods[i])
+  gg <- ggplot(WIDTH_PAIRS[which,], aes(x=log10(simulated_width), y=log10(called_width))) +
+    ggtitle(paste(dm_methods[i], "with marginal distribtions"))+
+    xlab("log10( Simulated DMR Width )")+
+    ylab("log10( Called DMR Width )")+
+  #  stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.6, alpha=0.8) +
+    geom_point(size=0.01, alpha=0.4)+
+    scale_fill_gradient(low="grey85", high="black")+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=6),
+      strip.text = element_text(face="bold", size=6, angle=0),
+      axis.text = element_text(face="bold", size=6, angle=0)
+    )
+  gg
+  gg <- ggMarginal(gg, type="histogram", size=10)
+  
+  filename<-paste(results_dir, date, "_", dm_methods[i],  "_sim_v_called_width_with_marginal_dist.png", sep = "")
+  #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+  
+  #grid.arrange(gg, ncol=1)
+  #dev.off()
+  
+  ggsave(
+    filename=filename,
+    plot = gg,
+    device = "png",
+    path = NULL,
+    scale = 1,
+    width = 4,
+    height = 4,
+    units = c("in"),
+    dpi = 320
+  )
+}
+
+```
+

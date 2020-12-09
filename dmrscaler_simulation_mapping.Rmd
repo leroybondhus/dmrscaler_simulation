@@ -887,7 +887,7 @@ for(RUN in 1:3){
 
 ```{r}
 WIDTH_PAIRS <- read.csv(file = "./results/10232020_WIDTH_PAIRS.csv")
-MAPPING_VALUES <- read.csv(file = "./results/10232020_MAPPING_VALUES.csv")
+MAPPING_VALUES2 <- read.csv(file = "./results/10232020_MAPPING_VALUES.csv")
 CALLED_TP_FP <- read.csv(file = "./results/10232020_CALLED_TP_FP.csv")
 
 library(ggExtra)
@@ -951,17 +951,15 @@ ggsave(
 
 
 
-
+MAPPING_VALUES2$method <- factor(MAPPING_VALUES2$method , levels = c("DMRscaler","bumphunter","DMRcate"))
 ### MAPPING VALUES PLOT
-
-gg <- ggplot(MAPPING_VALUES[which(MAPPING_VALUES$simul_width<1e4),], aes(x=log10(mapping_value))) +
+simul_count <- 2000
+gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   #ggtitle("simulated v called dmr length log10")+
-  #xlab("log10( Simulated DMR Width )")+
-  #ylab("log10( Called DMR Width )")+
-  #stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
-  geom_histogram()+
-  #scale_fill_gradient(low="grey70", high="grey20")+
-  #scale_fill_gradient(low="white", high="red")+
+  geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
+  scale_y_continuous(labels = percent ) +
+  ylab("Percent of Simulated DMRs")+
+  xlab("-log10(Mapping value) ")+
   theme_bw()+
   theme(
     plot.background = element_blank(),
@@ -972,10 +970,25 @@ gg <- ggplot(MAPPING_VALUES[which(MAPPING_VALUES$simul_width<1e4),], aes(x=log10
     axis.text = element_text(face="bold", size=6, angle=0),
     legend.position = "none"
   )+
-  facet_grid(. ~ method, labeller=labeller(method = labels) )
+  facet_grid(. ~ method )#, labeller=labeller(method = labels) )
 gg
 
+filename<-paste(results_dir, date, "_",  "mapping_ratios.png", sep = "")
+#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
+#grid.arrange(gg, ncol=1)
+#dev.off()
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 4,
+  height = 3,
+  units = c("in"),
+  dpi = 320
+)
 
 ```
 
@@ -1041,17 +1054,54 @@ for(m in unique(CALLED_TP_FP$method)){
   }
   
 }
-  
 
+for(m in names(P_R)){
+  max_R_feature <- max(P_R[[m]]$R_feature)
+  max_R_bp <- max(P_R[[m]]$R_bp)
+  P_R[[m]]<-rbind(P_R[[m]], data.frame(
+    "P_feature" = 0,
+    "R_feature" = max_R_feature,
+    "P_bp" = 0,
+    "R_bp" = max_R_bp
+  ))
+}
+
+auc <- list("DMRscaler"=data.frame(),"bumphunter"=data.frame(),"DMRcate"=data.frame())
+for(m in names(auc)){
+  auc[[m]]<-data.frame(
+    "feature_auc" = auc(P_R[[m]]$R_feature, P_R[[m]]$P_feature),
+    "bp_auc" = auc(P_R[[m]]$R_bp, P_R[[m]]$P_bp)
+  )
+}
 
 df_temp <- data.frame()
 for(i in 1:length(P_R)){
-  df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(names(P_R)[i]))) 
+  df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(paste(names(P_R)[i]) ))) #, "\nAUC = ",round(auc[[i]]$feature_auc,2), sep = "" ))  )) 
 }
 
 gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
-  geom_path(aes(color=method))
-filename<-paste(results_dir, date, "_",  "AUCPR_bp.png", sep = "")
+  ggtitle("Precision-Recall feature")+
+  labs(subtitle = paste(
+         "DMRscaler AUC=", round(auc[["DMRscaler"]]$feature_auc,3),
+         ", Bumphunter AUC=", round(auc[["bumphunter"]]$feature_auc,3),
+         ", DMRcate AUC=", round(auc[["DMRcate"]]$feature_auc,3)
+         ))+
+  xlab("Recall")+
+  ylab("Precision")+
+  geom_path(aes(linetype=method), size=0.5)+
+  xlim(0,1)+
+  ylim(0,1)+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=6),
+    strip.text = element_text(face="bold", size=6, angle=0),
+    axis.text = element_text(face="bold", size=6, angle=0)
+  )
+
+filename<-paste(results_dir, date, "_",  "AUCPR_feature.tiff", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)
@@ -1059,11 +1109,11 @@ filename<-paste(results_dir, date, "_",  "AUCPR_bp.png", sep = "")
 ggsave(
   filename=filename,
   plot = gg,
-  device = "png",
+  device = "tiff",
   path = NULL,
   scale = 1,
-  width = 6,
-  height = 2.5,
+  width = 4,
+  height = 3,
   units = c("in"),
   dpi = 320
 )

@@ -249,7 +249,8 @@ for(RUN in 1:1){
         
         overlaps_count_called <- countOverlaps( called_grs, simul_grs)
         overlaps_count_called
-        overlap_count_called_df <- data.frame("names"=as.numeric(names(overlaps_count_called)), "overlap_counts" = overlaps_count_called) 
+        ## names filled with NAs below... fix this issue -- tried removing name column - maybe sufficient?
+        overlap_count_called_df <- data.frame( "overlap_counts" = overlaps_count_called) 
         
         count_called_per_simul <- vector(length = length(simul_grs) )
         names(count_called_per_simul) <- simul_grs@ranges@NAMES
@@ -265,7 +266,7 @@ for(RUN in 1:1){
         ##Get TP FN values
         TP <- numeric(length = length(simul_grs))
         FN <- numeric(length = length(simul_grs))
-        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
         cs_overlap <- findOverlaps(simul_grs, cs_intersect )
         for(i in 1:length(simul_grs)){
           if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
@@ -287,7 +288,7 @@ for(RUN in 1:1){
         ##Get TP FP values
         TP <- numeric(length = length(called_grs))
         FP <- numeric(length = length(called_grs))
-        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
         cs_overlap <- findOverlaps(called_grs, cs_intersect )
         for(i in 1:length(called_grs)){
           if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
@@ -343,7 +344,7 @@ for(RUN in 1:1){
         
         overlaps_count_called <- countOverlaps( called_grs, simul_grs)
         overlaps_count_called
-        overlap_count_called_df <- data.frame("names"=as.numeric(names(overlaps_count_called)), "overlap_counts" = overlaps_count_called) 
+        overlap_count_called_df <- data.frame("overlap_counts" = overlaps_count_called) 
         
         count_called_per_simul <- vector(length = length(simul_grs) )
         names(count_called_per_simul) <- simul_grs@ranges@NAMES
@@ -359,7 +360,7 @@ for(RUN in 1:1){
                 ##Get TP FN values
         TP <- numeric(length = length(simul_grs))
         FN <- numeric(length = length(simul_grs))
-        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
         cs_overlap <- findOverlaps(simul_grs, cs_intersect )
         for(i in 1:length(simul_grs)){
           if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
@@ -381,7 +382,7 @@ for(RUN in 1:1){
         ##Get TP FP values
         TP <- numeric(length = length(called_grs))
         FP <- numeric(length = length(called_grs))
-        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
         cs_overlap <- findOverlaps(called_grs, cs_intersect )
         for(i in 1:length(called_grs)){
           if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
@@ -419,6 +420,8 @@ for(RUN in 1:1){
         dmrcate_results <- dmrcate(myannotation, lambda=1e6, C=2000)
         called_grs <- extractRanges(dmrcoutput = dmrcate_results, genome="hg19")
         called_grs$pval <- called_grs$Stouffer
+        temp_names <- paste("called", as.character(called_grs@seqnames) , called_grs@ranges@start, sep = "_")
+        names(called_grs) <- temp_names
         overlaps <- findOverlaps(simul_grs, called_grs)
         
         WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "DMRcate",
@@ -432,7 +435,7 @@ for(RUN in 1:1){
         
         overlaps_count_called <- countOverlaps( called_grs, simul_grs)
         overlaps_count_called
-        overlap_count_called_df <- data.frame("names"=as.numeric(names(overlaps_count_called)), "overlap_counts" = overlaps_count_called) 
+        overlap_count_called_df <- data.frame("overlap_counts" = overlaps_count_called) 
         
         count_called_per_simul <- vector(length = length(simul_grs) )
         names(count_called_per_simul) <- simul_grs@ranges@NAMES
@@ -442,7 +445,7 @@ for(RUN in 1:1){
           if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
           
           which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
-          max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which(overlap_count_called_df$names==which),"overlap_counts"])
+          max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which,"overlap_counts"])
           
           if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
           else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
@@ -451,7 +454,7 @@ for(RUN in 1:1){
         ##Get TP FN values
         TP <- numeric(length = length(simul_grs))
         FN <- numeric(length = length(simul_grs))
-        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
         cs_overlap <- findOverlaps(simul_grs, cs_intersect )
         for(i in 1:length(simul_grs)){
           if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
@@ -473,7 +476,7 @@ for(RUN in 1:1){
         ##Get TP FP values
         TP <- numeric(length = length(called_grs))
         FP <- numeric(length = length(called_grs))
-        cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+        cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
         cs_overlap <- findOverlaps(called_grs, cs_intersect )
         for(i in 1:length(called_grs)){
           if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
@@ -538,7 +541,7 @@ for(RUN in 1:1){
           
           overlaps_count_called <- countOverlaps( called_grs, simul_grs)
           overlaps_count_called
-          overlap_count_called_df <- data.frame("names"=as.numeric(names(overlaps_count_called)), "overlap_counts" = overlaps_count_called) 
+          overlap_count_called_df <- data.frame( "overlap_counts" = overlaps_count_called) 
           
           count_called_per_simul <- vector(length = length(simul_grs) )
           names(count_called_per_simul) <- simul_grs@ranges@NAMES
@@ -548,7 +551,7 @@ for(RUN in 1:1){
             if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
             
             which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
-            max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which(overlap_count_called_df$names==which),"overlap_counts"])
+            max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which,"overlap_counts"])
             
             if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
             else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
@@ -557,7 +560,7 @@ for(RUN in 1:1){
           ##Get TP FN values
           TP <- numeric(length = length(simul_grs))
           FN <- numeric(length = length(simul_grs))
-          cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+          cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
           cs_overlap <- findOverlaps(simul_grs, cs_intersect )
           for(i in 1:length(simul_grs)){
             if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
@@ -579,7 +582,7 @@ for(RUN in 1:1){
           ##Get TP FP values
           TP <- numeric(length = length(called_grs))
           FP <- numeric(length = length(called_grs))
-          cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+          cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
           cs_overlap <- findOverlaps(called_grs, cs_intersect )
           for(i in 1:length(called_grs)){
             if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
@@ -601,9 +604,9 @@ for(RUN in 1:1){
         ###### Add table to report timing statistics for each method ?? 
 
         
-        write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"WIDTH_PAIRS.csv"),sep = "")
-        write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"MAPPING_VALUES.csv"),sep="")
-        write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"CALLED_TP_FP.csv"),sep="")
+        write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"WIDTH_PAIRS.csv",sep=""))
+        write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"MAPPING_VALUES.csv",sep=""))
+        write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"CALLED_TP_FP.csv",sep=""))
 
         
         ####
@@ -778,7 +781,7 @@ for(m in unique(CALLED_TP_FP$method)){
       ranges = IRanges(start = temp$called_start[1:i], width = temp$called_width[1:i]),
       strand = rep("*", nrow(temp[1:i,]))
     )
-    cs_intersect <-  intersect( called_grs, simul_grs) ##### write this....
+    cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
     cs_overlap <- findOverlaps(simul_grs, cs_intersect )
     for(j in 1:length(simul_grs)){
       if(!is.element(j, cs_overlap@from)){ TP[j] <- 0; FN[i] <- 1;  next;}

@@ -1,0 +1,312 @@
+---
+title: "combp_param_selection_supplemental"
+author: "Leroy Bondhus"
+date: "7/22/2021"
+output: html_document
+---
+
+
+```{r}
+library("devtools")
+library(roxygen2)
+
+
+library(minfi)
+library(doParallel)
+library(rlang)
+library(MESS)
+
+library("valr")
+library(IRanges)
+library(GenomicRanges)
+registerDoParallel(cores = detectCores()-1)
+
+
+library("sva")
+library("minfiData")
+library("minfi")
+library("IlluminaHumanMethylationEPICmanifest") ###### NOTE hg19 is used IlluminaHumanMethylation450kanno.ilmn.hg19
+                                                ###### NOTE New mapping is used:
+                                                ######                   IlluminaHumanMethylationEPICanno.ilm10b4.hg19
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+
+library(DMRcate)
+document("/home/leroy/Desktop/PROJECTS/dmrscaler")
+install("/home/leroy/Desktop/PROJECTS/dmrscaler")
+
+results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
+```
+
+
+
+```{r}
+simul_sc_tbl <- data.frame("min_cgs"=c(3,6,9,12), "size"=c(1e3,1e4,1e5,1e6), "count"=c(50,50,50,50) )
+```
+
+
+```{r }
+locs<-read.csv("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_CG_locs_full.csv", row.names = 1)
+locs$names <- as.character(locs$names)
+B<-read.csv("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Beta_Matrix_full.csv", row.names = 1)
+pdat<-read.csv("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Pheno_Data_full.csv", row.names = 1)
+
+
+## DMRcate uses M values
+
+```
+
+
+
+```{r run_simulation_multiple times}
+WIDTH_PAIRS <- data.frame("method"=character(), "params"=character(),
+                          "simulated_width"=numeric(), "called_width"=numeric(), "run"=numeric())
+
+MAPPING_VALUES <- data.frame("method"=character(), "params"=character(),
+                             "simul_chr"=character(), "simul_start"=numeric(), "simul_width"=numeric(),
+                             "mapping_value"=numeric(), "TP%"=numeric(), "FN%"=numeric(), "run"=numeric())
+
+CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
+                             "called_chr"=character(), "called_start"=numeric(), "called_width"=numeric(),
+                             "TP%"=numeric(), "FP%"=numeric(), "pval"=numeric(), "run"=numeric())
+
+TIME <- data.frame("method"=character(), "params"=character(),"time"=numeric())
+
+combp_params <- data.frame("dist" = c(1e3,1e3,1e4), #,1e4,1e5,1e5,1e6,1e6,1e6),
+                           "step" = c(1e2,5e2,5e2), #,1e3,1e3,1e4,5e3,1e4,1e5),
+                           "time" = NA)
+
+for(RUN in 1:2){
+        ## delta_beta = artificial inflation of beta values between groups
+        ## num_samples = number of samples for each group
+        ## noise = proportion of cgs in DMR that are not to have an altered beta value
+        ## dmr_buffer = number of non-dmr cgs to enforce between each artificial dmr
+        
+        pars <- data.frame("delta_beta" = 0.2, "num_samples" = 8, "noise" = 0.5, "dmr_buffer" = 10) 
+        
+        
+        
+        ## r select dmrs ranges
+        locs$in_dmr <- rep(0, nrow(locs))
+        locs$dmr_size <- rep(0, nrow(locs))
+        #locs$dmr_left_bound <- rep(0, nrow(locs))
+        #locs$dmr_right_bound <- rep(0, nrow(locs))
+        locs$dmr_name <- rep("", nrow(locs))
+        
+        for(i in 1:nrow(simul_sc_tbl)){
+            size <- simul_sc_tbl[i,]$size
+            min_cgs <- simul_sc_tbl[i,]$min_cgs
+            count <- simul_sc_tbl[i,]$count
+           
+            while(count > 0){
+                size_sampled <-sample(floor(size/10)+1:size,1) 
+                x <- sample(1:nrow(locs),1)
+                x_loc <-locs[x,]
+                x_which <- which(locs$chr == x_loc$chr & locs$pos >= x_loc$pos & locs$pos <= x_loc$pos+size_sampled )
+                x_which_left <- min(x_which)-10
+                x_which_right <- max(x_which)+10
+                if(x_which_left <  min(which(locs$chr == x_loc$chr)) ){next;} ## test if valid left bound
+                if(x_which_right > max(which(locs$chr == x_loc$chr)) ){next;} ## test if valid right bound
+                if(length(x_which) >= min_cgs  ## at least min_cgs 
+                   & sum(locs$in_dmr[x_which_left:x_which_right])==0   ## not overlapping a dmr that already exists
+                    & (locs$pos[max(x_which)]-locs$pos[min(x_which)] >= size/10)  ##  size is between size/2 and size
+                   ){ ## min number cgs achieved and none in dmr already...
+                    
+                    x_which <- unique(c(min(x_which), sample(x_which, ceiling((1-pars$noise) * length(x_which) )  ) ,max(x_which))) ## sample left and right most cg and introduce noise 
+                    locs$in_dmr[x_which] <- 1
+                    locs$dmr_size[x_which] <- locs$pos[max(x_which)]-locs$pos[min(x_which)]
+                    locs$dmr_name[x_which] <- paste("dmr", size, count, sep = "_")
+                    # locs$dmr_left_bound[min(x_which)] <- 1
+                    # locs$dmr_right_bound[max(x_which)] <- 1
+                    count<-count-1
+                    
+                }
+            }
+        }
+
+        locs$chr <- as.character(locs$chr)  ## remove factor 
+        
+        
+        
+        
+        ## {r select two groups to simulate dmr in}
+        g12 <- sample(rownames(pdat), 2*pars$num_samples, replace = FALSE)
+        g1 <- g12[1:pars$num_samples]
+        g2 <- g12[(pars$num_samples+1):length(g12)]
+        
+        
+        ##{r simulate dmrs in beta matrix}
+        B_mod <- as.matrix(B[,g12])
+        
+        dmr_names <- unique(locs$dmr_name)[which(unique(locs$dmr_name)!="")]
+        for(i in 1:length(dmr_names)){
+          dmr_i <- dmr_names[i]
+          locs_i <- locs$names[which(locs$dmr_name==dmr_i)]
+          mean_g1_i <- mean(as.matrix(B_mod[locs_i,g1]))
+          mean_g2_i <- mean(as.matrix(B_mod[locs_i,g2]))
+          if(mean_g1_i > mean_g2_i){
+             B_mod[locs_i, g1] <- B_mod[locs_i, g1]+pars$delta_beta 
+          }else{ 
+              B_mod[locs_i, g2] <- B_mod[locs_i, g2]+pars$delta_beta 
+          }
+        }
+        
+        B_test <- B[,g12]
+        hist(as.matrix(B_test)-as.matrix(B_mod)) 
+        
+        length(is.element(rownames(B_mod)[which(rowMeans(as.matrix(B_test))-rowMeans(as.matrix(B_mod)) < -0.1)], locs$names[which(locs$in_dmr==1)]))
+     
+        
+        ## {r  pair simulated with called regions }
+        #### Want: real, simulated (potentially many:many)
+        #### Want: DMRs  -2 -1 0 1 2 log10 DMRs called/ DMR simulated (for each DMR simulated count overlapping called DMRs + for each DMR called count overlapping called DMRs (map all to simulated DMRs, take max, record sign))
+        simul_dmrs <- data.frame("chr"=rep(0, length(dmr_names)),"pos"=rep(0, length(dmr_names)),"length"=rep(0, length(dmr_names)), "name"=rep(0, length(dmr_names) ) )
+        for(i in 1:length(dmr_names)){
+          dmr_i <- dmr_names[i]
+          simul_dmrs$chr[i] <- unique(locs$chr[which(locs$dmr_name==dmr_i)])
+          simul_dmrs$pos[i] <- min(locs$pos[which(locs$dmr_name==dmr_i)])
+          simul_dmrs$length[i] <- min(locs$dmr_size[which(locs$dmr_name==dmr_i)])
+          simul_dmrs$name[i] <- dmr_names[i]
+        }
+        #simul_dmrs$chr <- paste("chr", simul_dmrs$chr, sep = "")
+        
+        simul_grs <- GRanges(
+          seqnames = simul_dmrs$chr,
+          ranges = IRanges(start = simul_dmrs$pos, width = simul_dmrs$length, names = simul_dmrs$name ),
+          strand = rep("*", nrow(simul_dmrs))
+        )
+        
+        for(param_index in 1:nrow(combp_params)){
+          ################# COMB-P ###################
+          ## Set up bed file
+          combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,end=locs$pos+1,pval=10^-mwr$p_val)
+          combp_input_bed <- combp_input_bed[order(combp_input_bed$chrom),]
+          colnames(combp_input_bed)[1] <- "#chrom"
+          data.table::fwrite(combp_input_bed, file = "./intermediate_data_2/combp_temp_input.bed", row.names = F,col.names = T, sep = "\t") 
+          ## Pass bed file into comb-p
+  
+          t1 <- Sys.time()
+          system(paste("comb-p pipeline -c 4 --dist",
+                       trimws(format(combp_params$dist[param_index], scientific=F)),
+                       " --step ",
+                       trimws(format(combp_params$step[param_index], scientific=F)) ," --seed 1e-3 -p ./intermediate_data_2/test --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed "))
+          t2 <- Sys.time()
+          TIME <- rbind(TIME, data.frame("method" = "comb-p",
+                                         "params" = paste("dist=",combp_params$dist[param_index],";step=",combp_params$step[param_index]),
+                                         "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+  
+          ## Parse comb-p resuults into the CALLED_TP_FP and the MAPPING VALUES tables
+          combp_results <- data.table::fread("./intermediate_data_2/test.regions-t.bed")
+          
+          ###### Next add comb-p to simulation results
+          {
+            ## convert result to grange object
+            temp_names <- paste("called", combp_results$'#chrom' , combp_results$start, sep = "_")
+            called_grs <- GRanges(
+              seqnames = combp_results$`#chrom`,
+              ranges = IRanges(start = combp_results$start, end = combp_results$end, names = temp_names),
+              strand = rep("*", nrow(combp_results)) 
+            )   
+            called_grs$pval <- combp_results$z_p
+            overlaps <- findOverlaps(simul_grs, called_grs)
+            
+            WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "comb-p",
+                                                 "params" = paste("dist=",combp_params$dist[param_index],";step=",combp_params$step[param_index])  ,
+                                                 "simulated_width"=simul_grs@ranges@width[overlaps@from],
+                                                 "called_width"=called_grs@ranges@width[overlaps@to],
+                                                 "run"=RUN))
+            
+            overlaps_count_simul <- countOverlaps( simul_grs, called_grs)
+            overlaps_count_simul 
+            
+            overlaps_count_called <- countOverlaps( called_grs, simul_grs)
+            overlaps_count_called
+            overlap_count_called_df <- data.frame( "overlap_counts" = overlaps_count_called) 
+            
+            count_called_per_simul <- vector(length = length(simul_grs) )
+            names(count_called_per_simul) <- simul_grs@ranges@NAMES
+            
+            for(i in 1:length(simul_grs)){
+              print(i)
+              if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
+              
+              which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
+              max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which,"overlap_counts"])
+              
+              if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
+              else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
+            }
+            
+            ##Get TP FN values
+            TP <- numeric(length = length(simul_grs))
+            FN <- numeric(length = length(simul_grs))
+            cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
+            cs_overlap <- findOverlaps(simul_grs, cs_intersect )
+            for(i in 1:length(simul_grs)){
+              if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FN[i] <- 1;  next;}
+              which<-cs_overlap@to[which(cs_overlap@from==i)]
+              TP[i] <- sum(cs_intersect[which]@ranges@width) / simul_grs[i]@ranges@width
+              FN[i] <- 1 - TP[i]
+            }
+    
+            ### save count_called_per_simul vector. To plot : density of log10 values.
+            MAPPING_VALUES <- rbind(MAPPING_VALUES, data.frame("method" = "comb-p",
+                                                               "params" = paste("dist=",combp_params$dist[param_index],
+                                                                                ";step=",combp_params$step[param_index]),
+                                                               "simul_chr"=simul_dmrs$chr, 
+                                                               "simul_start"=simul_dmrs$pos, 
+                                                               "simul_width"=simul_dmrs$length,
+                                                               "mapping_value"= unname(count_called_per_simul),
+                                                               "TP%"= TP,
+                                                               "FN%"= FN,
+                                                               "run"=RUN))
+            ##Get TP FP values
+            TP <- numeric(length = length(called_grs))
+            FP <- numeric(length = length(called_grs))
+            cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
+            cs_overlap <- findOverlaps(called_grs, cs_intersect )
+            for(i in 1:length(called_grs)){
+              if(!is.element(i, cs_overlap@from)){ TP[i] <- 0; FP[i] <- 1;  next;}
+              which<-cs_overlap@to[which(cs_overlap@from==i)]
+              TP[i] <- sum(cs_intersect[which]@ranges@width) / called_grs[i]@ranges@width
+              FP[i] <- 1 - TP[i]
+            }
+            
+            CALLED_TP_FP <- rbind(CALLED_TP_FP, data.frame("method" = "combp",
+                                                           "params" = paste("dist=",combp_params$dist[param_index],
+                                                                            ";step=",combp_params$step[param_index]) ,
+                                                           "called_chr"=as.character(called_grs@seqnames),
+                                                           "called_start"=called_grs@ranges@start,
+                                                           "called_width"=called_grs@ranges@width,
+                                                           "TP%"= TP, 
+                                                           "FP%"= FP, 
+                                                           "pval"= called_grs$pval,
+                                                           "run"=RUN))
+          }
+          ###### Add table to report timing statistics for each method ?? 
+        }
+        
+        write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_WIDTH_PAIRS.csv",sep=""))
+        write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_MAPPING_VALUES.csv",sep=""))
+        write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_CALLED_TP_FP.csv",sep=""))
+        write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_TIME.csv",sep=""))
+
+        
+        ####
+        
+        
+        
+}
+write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_WIDTH_PAIRS.csv"),sep = "")
+write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_MAPPING_VALUES.csv"),sep="")
+write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_CALLED_TP_FP.csv"),sep="")
+
+#hist(log10(WIDTH_PAIRS$simulated_width))
+#plot(log10(WIDTH_PAIRS$simulated_width),log10(WIDTH_PAIRS$called_width))
+#a<-mean(log10(WIDTH_PAIRS$called_width))
+#plot((log10(WIDTH_PAIRS$simulated_width)), (log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) ) )
+
+#1- (sum((log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) )^2 ) /sum((log10(WIDTH_PAIRS$called_width)-a)^2 )) ## R squared
+
+```

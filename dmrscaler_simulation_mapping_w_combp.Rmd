@@ -33,7 +33,7 @@ library(gridExtra)
 
 library(DMRcate)
 document("/home/leroy/Desktop/PROJECTS/dmrscaler")
-install("/home/leroy/Desktop/PROJECTS/dmrscaler")
+install("/home/leroy/Desktop/PROJECTS/dmrscaler", quiet=T)
 
 results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
 ```
@@ -70,6 +70,8 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
                              "called_chr"=character(), "called_start"=numeric(), "called_width"=numeric(),
                              "TP%"=numeric(), "FP%"=numeric(), "pval"=numeric(), "run"=numeric())
 
+TIME <- data.frame("method"=character(), "params"=character(),"time"=numeric())
+
 
 
 #BH_WIDTH_PAIRS <- data.frame("simulated_width"=numeric(), "called_width"=numeric(), "param_string"=character())
@@ -77,7 +79,7 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
 #DMRCATE_WIDTH_PAIRS <- data.frame("simulated_width"=numeric(), "called_width"=numeric(), "param_string"=character())
 #DMRCATE_MAPPING_VALUES <- data.frame("mapping_value"=numeric(), "param_string"=character())
 
-for(RUN in 1:1){
+for(RUN in 1:5){
         ## delta_beta = artificial inflation of beta values between groups
         ## num_samples = number of samples for each group
         ## noise = proportion of cgs in DMR that are not to have an altered beta value
@@ -197,8 +199,13 @@ for(RUN in 1:1){
               layer_sizes <- c(2,4,8,16,32,64)
               layers<-list()
               
+              t1 <- Sys.time() 
               dmrscaler_result <- dmrscaler::dmrscaler(locs = data, fdrscaler = fdrscaler, cltable=cltable, layer_sizes = layer_sizes)
               built_layers <- dmrscaler_result
+              t2 <- Sys.time()
+              TIME <- rbind(TIME, data.frame("method" = "dmrscaler",
+                               "params" = "default",
+                               "time"=as.numeric(difftime(t1,t2, "secs")) ) )
         
         ## {r  pair simulated with called regions }
         #### Want: real, simulated (potentially many:many)
@@ -320,7 +327,13 @@ for(RUN in 1:1){
         design<-rep(-1,length(colnames(B_mod)))
         design[which(is.element(colnames(B_mod),g1))]<-1
         design<-cbind(rep(1,length(colnames(B_mod) ) ), design )
+        t1 <- Sys.time()
         bumps4 <- bumphunter(B_mod,as.matrix(design),chr = locs$chr, pos=locs$pos, cutoff=0.1, maxGap=1e6, B=250, smoothFunction=loessByCluster )
+        t2 <- Sys.time()
+        TIME <- rbind(TIME, data.frame("method" = "bumphunter",
+                           "params" = "maxGap=1e6,cutoff=0.1",
+                           "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+        
         temp_names <- paste("called", bumps4$table$chr, bumps4$table$start, sep = "_")
         called_grs <- GRanges(
           seqnames = bumps4$table$chr,
@@ -416,8 +429,16 @@ for(RUN in 1:1){
         B_mod[which(B_mod >= 1)] <- max(B_mod[which(B_mod<1)])
         M <- log2(B_mod / (1-(B_mod)) )
         myannotation <- cpg.annotate("array", object=M, what="M", arraytype = "450K", analysis.type = "differential", design = design,  coef = 2)
-        
+        t1 <- Sys.time()
         dmrcate_results <- dmrcate(myannotation, lambda=1e6, C=2000)
+        t2 <- Sys.time()
+        TIME <- rbind(TIME, data.frame("method" = "DMRcate",
+                           "params" = "lambda=1e6_C=2000",
+                           "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+        
+        
+        
+        
         called_grs <- extractRanges(dmrcoutput = dmrcate_results, genome="hg19")
         called_grs$pval <- called_grs$Stouffer
         temp_names <- paste("called", as.character(called_grs@seqnames) , called_grs@ranges@start, sep = "_")
@@ -510,13 +531,17 @@ for(RUN in 1:1){
         data.table::fwrite(combp_input_bed, file = "./intermediate_data_2/combp_temp_input.bed", row.names = F,col.names = T, sep = "\t") 
         ## Pass bed file into comb-p
 
-        Sys.time()
-        system("comb-p pipeline -c 4 --dist 100000 --step 5000 --seed 1e-3 -p ./intermediate_data_2/test100k5k --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
-        Sys.time()
+        t1 <- Sys.time()
+        system("comb-p pipeline -c 4 --dist 1000000 --step 1000 --seed 1e-3 -p ./intermediate_data_2/test --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
+        t2 <- Sys.time()
+        TIME <- rbind(TIME, data.frame("method" = "combp",
+                           "params" = "dist=1e6_step=1e3",
+                           "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+        
         
 
         ## Parse comb-p resuults into the CALLED_TP_FP and the MAPPING VALUES tables
-        combp_results <- data.table::fread("./intermediate_data_2/test100k5k.regions-t.bed")
+        combp_results <- data.table::fread("./intermediate_data_2/test.regions-t.bed")
         
         ###### Next add comb-p to simulation results
         {
@@ -531,7 +556,7 @@ for(RUN in 1:1){
           overlaps <- findOverlaps(simul_grs, called_grs)
           
           WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "comb-p",
-                                               "params" = "dist=1e6_step=5e4"  ,
+                                               "params" = "dist=1e6_step=1e3"  ,
                                                "simulated_width"=simul_grs@ranges@width[overlaps@from],
                                                "called_width"=called_grs@ranges@width[overlaps@to],
                                                "run"=RUN))
@@ -571,7 +596,7 @@ for(RUN in 1:1){
   
           ### save count_called_per_simul vector. To plot : density of log10 values.
           MAPPING_VALUES <- rbind(MAPPING_VALUES, data.frame("method" = "comb-p",
-                                                             "params" = "dist=1e6_step=5e4" ,
+                                                             "params" = "dist=1e6_step=1e3" ,
                                                              "simul_chr"=simul_dmrs$chr, 
                                                              "simul_start"=simul_dmrs$pos, 
                                                              "simul_width"=simul_dmrs$length,
@@ -592,7 +617,7 @@ for(RUN in 1:1){
           }
           
           CALLED_TP_FP <- rbind(CALLED_TP_FP, data.frame("method" = "combp",
-                                                         "params" = "dist=1e6_step=5e4" ,
+                                                         "params" = "dist=1e6_step=1e3" ,
                                                          "called_chr"=as.character(called_grs@seqnames),
                                                          "called_start"=called_grs@ranges@start,
                                                          "called_width"=called_grs@ranges@width,
@@ -604,9 +629,10 @@ for(RUN in 1:1){
         ###### Add table to report timing statistics for each method ?? 
 
         
-        write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"WIDTH_PAIRS.csv",sep=""))
-        write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"MAPPING_VALUES.csv",sep=""))
-        write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"CALLED_TP_FP.csv",sep=""))
+        write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"WIDTH_PAIRS.csv",sep=""))
+        write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"MAPPING_VALUES.csv",sep=""))
+        write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"CALLED_TP_FP.csv",sep=""))
+        write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"TIME.csv",sep=""))
 
         
         ####
@@ -614,17 +640,12 @@ for(RUN in 1:1){
         
         
 }
-write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"WIDTH_PAIRS.csv"),sep = "")
-write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"MAPPING_VALUES.csv"),sep="")
-write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"CALLED_TP_FP.csv"),sep="")
 
-#hist(log10(WIDTH_PAIRS$simulated_width))
-#plot(log10(WIDTH_PAIRS$simulated_width),log10(WIDTH_PAIRS$called_width))
-#a<-mean(log10(WIDTH_PAIRS$called_width))
-#plot((log10(WIDTH_PAIRS$simulated_width)), (log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) ) )
-
-#1- (sum((log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) )^2 ) /sum((log10(WIDTH_PAIRS$called_width)-a)^2 )) ## R squared
-
+write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"WIDTH_PAIRS.csv",sep = ""))
+write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"MAPPING_VALUES.csv",sep=""))
+write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"CALLED_TP_FP.csv",sep=""))
+write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"TIME.csv",sep=""))
+save.image( paste(format(Sys.time(),"%Y-%m-%d_"),"Post_simul.Rdata",sep = ""))
 ```
 
 
@@ -702,9 +723,8 @@ ggsave(
 
 
 
-MAPPING_VALUES2$method <- factor(MAPPING_VALUES2$method , levels = c("DMRscaler","bumphunter","DMRcate"))
 ### MAPPING VALUES PLOT
-simul_count <- 2000
+simul_count <- 200
 gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   #ggtitle("simulated v called dmr length log10")+
   geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+

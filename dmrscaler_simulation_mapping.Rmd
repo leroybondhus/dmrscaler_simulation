@@ -1,7 +1,7 @@
 ---
-title: "dmrscaler_simulation_mapping"
-author: "Leroy_Bondhus"
-date: "July 28, 2020"
+title: "dmrscaler_simulation_mapping_w_combp"
+author: "Leroy Bondhus"
+date: "7/16/2021"
 output: html_document
 ---
 
@@ -18,7 +18,7 @@ library(MESS)
 library("valr")
 library(IRanges)
 library(GenomicRanges)
-registerDoParallel()
+registerDoParallel(cores = detectCores()-1)
 
 
 library("sva")
@@ -32,10 +32,10 @@ library(ggplot2)
 library(gridExtra)
 
 library(DMRcate)
-document("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
-install("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
+document("/home/leroy/Desktop/PROJECTS/dmrscaler")
+install("/home/leroy/Desktop/PROJECTS/dmrscaler")
 
-results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results/")
+results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
 ```
 
 
@@ -46,333 +46,15 @@ simul_sc_tbl <- data.frame("min_cgs"=c(3,6,9,12), "size"=c(1e3,1e4,1e5,1e6), "co
 
 
 ```{r }
-locs<-read.csv("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_CG_locs_full.csv", row.names = 1)
+locs<-read.csv("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_CG_locs_full.csv", row.names = 1)
 locs$names <- as.character(locs$names)
-B<-read.csv("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Beta_Matrix_full.csv", row.names = 1)
-pdat<-read.csv("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Pheno_Data_full.csv", row.names = 1)
+B<-read.csv("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Beta_Matrix_full.csv", row.names = 1)
+pdat<-read.csv("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/intermediate_data/Control_Pheno_Data_full.csv", row.names = 1)
 
 
 ## DMRcate uses M values
 
 ```
-
-
-```{r}
-
-## delta_beta = artificial inflation of beta values between groups
-## num_samples = number of samples for each group
-## noise = proportion of cgs in DMR that are not to have an altered beta value
-## dmr_buffer = number of non-dmr cgs to enforce between each artificial dmr
-
-pars <- data.frame("delta_beta" = 0.2, "num_samples" = 10, "noise" = 0.5, "dmr_buffer" = 10) 
-```
-
-
-```{r select dmrs ranges}
-locs$in_dmr <- rep(0, nrow(locs))
-locs$dmr_size <- rep(0, nrow(locs))
-#locs$dmr_left_bound <- rep(0, nrow(locs))
-#locs$dmr_right_bound <- rep(0, nrow(locs))
-locs$dmr_name <- rep("", nrow(locs))
-
-for(i in 1:nrow(simul_sc_tbl)){
-    size <- simul_sc_tbl[i,]$size
-    min_cgs <- simul_sc_tbl[i,]$min_cgs
-    count <- simul_sc_tbl[i,]$count
-   
-    while(count > 0){
-        size_sampled <-sample(floor(size/10)+1:size,1) 
-        x <- sample(1:nrow(locs),1)
-        x_loc <-locs[x,]
-        x_which <- which(locs$chr == x_loc$chr & locs$pos >= x_loc$pos & locs$pos <= x_loc$pos+size_sampled )
-        x_which_left <- min(x_which)-10
-        x_which_right <- max(x_which)+10
-        if(x_which_left <  min(which(locs$chr == x_loc$chr)) ){next;} ## test if valid left bound
-        if(x_which_right > max(which(locs$chr == x_loc$chr)) ){next;} ## test if valid right bound
-        if(length(x_which) >= min_cgs  ## at least min_cgs 
-           & sum(locs$in_dmr[x_which_left:x_which_right])==0   ## not overlapping a dmr that already exists
-            & (locs$pos[max(x_which)]-locs$pos[min(x_which)] >= size/10)  ##  size is between size/2 and size
-           ){ ## min number cgs achieved and none in dmr already...
-            
-            x_which <- unique(c(min(x_which), sample(x_which, ceiling((1-pars$noise) * length(x_which) )  ) ,max(x_which))) ## sample left and right most cg and introduce noise 
-            locs$in_dmr[x_which] <- 1
-            locs$dmr_size[x_which] <- locs$pos[max(x_which)]-locs$pos[min(x_which)]
-            locs$dmr_name[x_which] <- paste("dmr", size, count, sep = "_")
-            # locs$dmr_left_bound[min(x_which)] <- 1
-            # locs$dmr_right_bound[max(x_which)] <- 1
-            count<-count-1
-            
-        }
-    }
-}
-
-#hist(log10(locs$dmr_size[which(locs$in_dmr==1)]), breaks=200)
-#locs$pos[35041] - locs$pos[34998]
-
-locs$chr <- as.character(locs$chr)  ## remove factor 
-
-
-```
-
-
-```{r select two groups to simulate dmr in}
-g12 <- sample(rownames(pdat), 2*pars$num_samples, replace = FALSE)
-g1 <- g12[1:pars$num_samples]
-g2 <- g12[(pars$num_samples+1):length(g12)]
-```
-
-```{r simulate dmrs in beta matrix}
-B_mod <- as.matrix(B[,g12])
-
-dmr_names <- unique(locs$dmr_name)[which(unique(locs$dmr_name)!="")]
-for(i in 1:length(dmr_names)){
-  dmr_i <- dmr_names[i]
-  locs_i <- locs$names[which(locs$dmr_name==dmr_i)]
-  mean_g1_i <- mean(as.matrix(B_mod[locs_i,g1]))
-  mean_g2_i <- mean(as.matrix(B_mod[locs_i,g2]))
-  if(mean_g1_i > mean_g2_i){
-     B_mod[locs_i, g1] <- B_mod[locs_i, g1]+pars$delta_beta 
-  }else{ 
-      B_mod[locs_i, g2] <- B_mod[locs_i, g2]+pars$delta_beta 
-  }
-}
-
-## renormalize rows where B > 1
-for(i in 1:nrow(B_mod)){
-  if(any(B_mod[i,]>1)){
-    B_mod[i,] <- B_mod[i,] / max(B_mod[i,] )
-  }
-}
-
-B_test <- B[,g12]
-hist(as.matrix(B_test)-as.matrix(B_mod)) 
-
-length(is.element(rownames(B_mod)[which(rowMeans(as.matrix(B_test))-rowMeans(as.matrix(B_mod)) < -0.1)], locs$names[which(locs$in_dmr==1)]))
-
-```
-
-
-```{r}
-      
-      ############################     run everything         #########################
-      num_perm <- 10
-      #clt_reps <- 5e5
-      clt_reps <- 5e4
-      
-      rim <- dmrscaler::generate_rand_index_matrix(num_controls = length(g1),
-                                                   num_cases = length(g2),
-                                                   num_permutations = num_perm)
-      mrp <- dmrscaler::run_MWW_rand_permutation(index_matrix = rim, 
-                                                 Beta = B_mod,
-                                                 num_permutations = num_perm)
-      mrp <- -log10(mrp)
-      mwr <- dmrscaler::run_MWW(control_indices = which(colnames(B_mod)==g1) ,
-                                case_indices = which(colnames(B_mod)==g2),
-                                Beta = B_mod)
-      mwr <- -log10(mwr)
-      fdt <- dmrscaler::write_FDR_table(real_table = mwr,
-                                        rand_table = mrp)
-      
-      fdrscaler <- dmrscaler::get_FDR_scalar(MWW_FDR_table = fdt,
-                                             MWW_FDR_threshold = 0.1)
-      if(is.na(fdrscaler)){fdrscaler <- 1}
-      cltable <- dmrscaler::write_CLT_lookup_table(num_reps = clt_reps ,
-                                                   data_to_sample = mwr$p_val,
-                                                   FDR_scaler = fdrscaler,
-                                                   clt_numCGs = c(2, 5, 10, 25, 50))
-      ## data <-  names, chr, pos,  scoring_value (-log10pval)
-    #  data <- controlCGlocs
-      data <- locs[,1:3]
-      data$chr <- as.factor(data$chr)
-      colnames(data)<-c("names","pos","chr")
-      data$scoring_values <- mwr$p_val
-    #  data$chr <- droplevels(data$chr)
-      layer_sizes <- c(2,4,8,16,32,64)
-      layers<-list()
-      for(i in 1:length(layer_sizes)){
-        print(paste("layer", i, sep="_"))
-        nn_step_fraction = 2 
-        nn_step_size <- floor(layer_sizes[i] / nn_step_fraction)
-        nn <- dmrscaler::n_nearest_window_scoring_func(indat = data, n_nearest = layer_sizes[i], step_size = nn_step_size, FDR = fdrscaler)
-        signn <- dmrscaler::determine_significant_windows(window_results=nn, indat=data, quants=cltable , quants_significance_cutoff = "0.9999" )
-        signn <- dmrscaler::add_significance(three_window_list =  signn, lookup_table = cltable)
-        
-        ## multiple chromosomes each a list, coerce to single dataframe
-        signn <- bind_rows(signn)
-        ## 
-        
-        layers[[i]]<-signn
-      }
-      
-      layers_TEMP_BACKUP <- layers
-      layers<-layers_TEMP_BACKUP
-      
-      names(layers)<-paste("layer", layer_sizes, sep="_")
-      
-      # for(i in 1:length(layers)){
-      #   temp<-as.data.frame(layers[[i]][[1]])
-      #  # print(length(layers[[i]]))
-      #   if(length(layers[[i]]) <= 1){ 
-      #   layers[[i]]<-temp
-      #   next
-      #   }
-      #   for(j in 2:length(layers[[i]])){
-      #     temp<-rbind(temp, layers[[i]][[j]])
-      #   }
-      #   layers[[i]]<-temp[[1]]
-      # }
-      
-      atomic_layer <- data
-      for(i in 1:length(layers)){
-        for(k in 1:length(layers[[i]]$start_pos)){
-          layers[[i]]$start_index[k]<-which(atomic_layer$pos==layers[[i]]$start_pos[k] & as.character(atomic_layer$chr) == as.character(layers[[i]]$chr[k]))
-          layers[[i]]$stop_index[k]<-which(atomic_layer$pos==layers[[i]]$stop_pos[k] & as.character(atomic_layer$chr) == as.character(layers[[i]]$chr[k]))
-        }
-      }
-      built_layers <- list()
-      built_layers[[1]] <- in_layer_merge(dmrs = layers[[1]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
-      for(i in 2:length(layers)){
-        #print(i)
-        built_layers[[i]] <- build_next_layer(prev_layer = built_layers[[i-1]], 
-                                              windows_to_layer = layers[[i]], 
-                                              CG_table = atomic_layer,
-                                              FDR_scaler=fdrscaler,
-                                              lookup_table = cltable)
-       # print("done with one")
-      }
-
-
-
-```
-
-
-```{r  pair simulated with called regions }
-#### Want: real, simulated (potentially many:many)
-#### Want: DMRs  -2 -1 0 1 2 log10 DMRs called/ DMR simulated (for each DMR simulated count overlapping called DMRs + for each DMR called count overlapping called DMRs (map all to simulated DMRs, take max, record sign))
-simul_dmrs <- data.frame("chr"=rep(0, length(dmr_names)),"pos"=rep(0, length(dmr_names)),"length"=rep(0, length(dmr_names)), "name"=rep(0, length(dmr_names) ) )
-for(i in 1:length(dmr_names)){
-  dmr_i <- dmr_names[i]
-  simul_dmrs$chr[i] <- unique(locs$chr[which(locs$dmr_name==dmr_i)])
-  simul_dmrs$pos[i] <- min(locs$pos[which(locs$dmr_name==dmr_i)])
-  simul_dmrs$length[i] <- min(locs$dmr_size[which(locs$dmr_name==dmr_i)])
-  simul_dmrs$name[i] <- dmr_names[i]
-}
-#simul_dmrs$chr <- paste("chr", simul_dmrs$chr, sep = "")
-
-simul_grs <- GRanges(
-  seqnames = simul_dmrs$chr,
-  ranges = IRanges(start = simul_dmrs$pos, width = simul_dmrs$length, names = simul_dmrs$name ),
-  strand = rep("*", nrow(simul_dmrs))
-)
-
-called_dmrs <- built_layers[[length(built_layers)]]
-temp_names <- paste("called", called_dmrs$chr, called_dmrs$start_pos, sep = "_")
-called_grs <- GRanges(
-  seqnames = called_dmrs$chr,
-  ranges = IRanges(start = called_dmrs$start_pos, end = called_dmrs$stop_pos, names = temp_names),
-  strand = rep("*", nrow(called_dmrs))
-)
-
-## basis for generating simul_length vs called_length plot
-overlaps <- findOverlaps(simul_grs, called_grs)
-plot(log10(simul_grs@ranges@width[overlaps@from]), log10(called_grs@ranges@width[overlaps@to]))
-cor( log10(simul_grs@ranges@width[overlaps@from]),log10(called_grs@ranges@width[overlaps@to]))
-### write pairs of simul_width and called_width. To plot: plot log10 transformed widths  
-
-############################################
-
-
-##### one-to-one, many-to-one, one-to-many plot setup  
-overlaps_count_simul <- countOverlaps( simul_grs, called_grs)
-overlaps_count_simul 
-
-overlaps_count_called <- countOverlaps( called_grs, simul_grs)
-overlaps_count_called
-overlap_count_called_df <- data.frame("names"=names(overlaps_count_called), "overlap_counts" = overlaps_count_called) 
-
-count_called_per_simul <- vector(length = length(simul_grs) )
-names(count_called_per_simul) <- simul_grs@ranges@NAMES
-
-for(i in 1:length(simul_grs)){
-  if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
-  which <- which(overlaps@from==i)  ## select rows of overlaps corresponding to simulated dmr
-  max_overlapping_those_called_over_sim <-max(overlap_count_called_df[which,"overlap_counts"])
-  if(overlaps_count_simul[i] >= max_overlapping_those_called_over_sim){ count_called_per_simul[i] <- overlaps_count_simul[i]}
-  else{count_called_per_simul[i] <- 1/max_overlapping_those_called_over_sim}  ## fraction if multiple simulated map to single called
-}
-### save count_called_per_simul vector. To plot : density of log10 values.
-
-################################
-
-
-## error plots (missed dmrs and edge error for called dmrs)
-####  trim edge to improve
-#### 
-
-
-```
-
-
-```{r error_test Figures}
-temp<-locs
-temp$mwr<-temp$neglog10pval
-a<-built_layers[[6]]
-a$length <- a$stop_pos-a$start_pos
-
-png(filename = "./results/08062020_CG_pval_dists_AND_DMR_sizes_dists.png")
-par(mfrow=c(2,2))
-hist(temp$mwr$p_val[which(temp$in_dmr==0)], breaks = 50, main = paste("CpGs NOT IN DMR (delta beta 0.8)"), xlab = paste("-log10pval"))
-hist(temp$mwr$p_val[which(temp$in_dmr==1)], breaks = 50, main = paste("CpGs IN DMR  (delta beta 0.8)"), xlab = paste("-log10pval"))
-
-hist(log10(a$length), breaks = 50, xlim=c(0,6.2), ylim=c(0,12), main = paste("Size of called DMRs"),xlab="log10(bp)")
-hist(log10(unique( temp[,c("dmr_size","dmr_name")])$dmr_size), breaks=50, xlim=c(0,6.2), ylim=c(0,12), main = paste("Size of simulated DMRs"), xlab="log10(bp)")
-
-dev.off()
-
-length(unique( temp[,c("dmr_size","dmr_name")])$dmr_size)
-nrow(a)
-
-
-temps <- data.frame("chr"=rep(0, length(dmr_names)),"pos"=rep(0, length(dmr_names)),"length"=rep(0, length(dmr_names) ))
-for(i in 1:length(dmr_names)){
-  dmr_i <- dmr_names[i]
-  temps$chr[i] <- unique(locs$chr[which(locs$dmr_name==dmr_i)])
-  temps$pos[i] <- min(locs$pos[which(locs$dmr_name==dmr_i)])
-  temps$length[i] <- min(locs$dmr_size[which(locs$dmr_name==dmr_i)])
-}
-temps$chr <- paste("chr", temps$chr, sep = "")
-temps2 <- a[,c("chr","start_pos","length")]  
-
-sort(temps2)
-
-
-write.csv(temps, file = "./results/08062020_error_check_simulated_dmrs.csv")
-write.csv(temps2, file = "./results/08062020_error_check_called_dmrs.csv")
-```
-
-
-```{r checking INDMR label with BETA}
-
-locs$names[which(locs$in_dmr==1)]
-hist(rowMeans(B_mod[locs$names[which(locs$in_dmr==1)],g1])- rowMeans(B_mod[locs$names[which(locs$in_dmr==1)],g2]), breaks = 40)
-#rowMeans(B_mod[locs$names[which(locs$in_dmr==1)],g1])- rowMeans(B_mod[locs$names[which(locs$in_dmr==1)) 
-locs$neglog10pval <- mwr
-plot( rowMeans(B_mod[locs$names[which(locs$in_dmr==1)],g1])- rowMeans(B_mod[locs$names[which(locs$in_dmr==1)],g2]), locs$neglog10pval$p_val[which(locs$in_dmr==1)] )
-### issue is in assigning significance? Looks like the INDMRs are proper being artificially inflated or deflated.. maybe an issue with control/ case assignment??
-
-length(which(rownames(mwr)==locs$names))
-length(which(rownames(B_mod)==locs$names))
-locs$neglog10pval <- mwr
-
-
-
-
-```
-
-
-
-
-
 
 
 
@@ -514,62 +196,9 @@ for(RUN in 1:3){
             #  data$chr <- droplevels(data$chr)
               layer_sizes <- c(2,4,8,16,32,64)
               layers<-list()
-              for(i in 1:length(layer_sizes)){
-                print(paste("layer", i, sep="_"))
-                nn_step_fraction = 2 
-                nn_step_size <- floor(layer_sizes[i] / nn_step_fraction)
-                nn <- dmrscaler::n_nearest_window_scoring_func(indat = data, n_nearest = layer_sizes[i], step_size = nn_step_size, FDR = fdrscaler)
-                signn <- dmrscaler::determine_significant_windows(window_results=nn, indat=data, quants=cltable , quants_significance_cutoff = "0.9999" )
-                signn <- dmrscaler::add_significance(three_window_list =  signn, lookup_table = cltable)
-                
-                ## multiple chromosomes each a list, coerce to single dataframe
-                signn <- bind_rows(signn)
-                ## 
-                
-                layers[[i]]<-signn
-              }
               
-              layers_TEMP_BACKUP <- layers
-              layers<-layers_TEMP_BACKUP
-              
-              names(layers)<-paste("layer", layer_sizes, sep="_")
-              
-              # for(i in 1:length(layers)){
-              #   temp<-as.data.frame(layers[[i]][[1]])
-              #  # print(length(layers[[i]]))
-              #   if(length(layers[[i]]) <= 1){ 
-              #   layers[[i]]<-temp
-              #   next
-              #   }
-              #   for(j in 2:length(layers[[i]])){
-              #     temp<-rbind(temp, layers[[i]][[j]])
-              #   }
-              #   layers[[i]]<-temp[[1]]
-              # }
-                  
-              atomic_layer <- data
-              for(i in 1:length(layers)){
-                for(k in 1:length(layers[[i]]$start_pos)){
-                  layers[[i]]$start_index[k]<-which(atomic_layer$pos==layers[[i]]$start_pos[k] & as.character(atomic_layer$chr) == as.character(layers[[i]]$chr[k]))
-                  layers[[i]]$stop_index[k]<-which(atomic_layer$pos==layers[[i]]$stop_pos[k] & as.character(atomic_layer$chr) == as.character(layers[[i]]$chr[k]))
-                }
-              }
-              built_layers <- list()
-              built_layers[[1]] <- in_layer_merge(dmrs = layers[[1]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
-              built_layers[[1]] <- in_layer_merge(dmrs = built_layers[[1]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
-              built_layers[[1]] <- trim_layer(dmrs = built_layers[[1]], CG_table = atomic_layer, FDR_scaler = 2, lookup_table = cltable)
-              for(i in 2:length(layers)){
-                #print(i)
-                built_layers[[i]] <- build_next_layer(prev_layer = built_layers[[i-1]], 
-                                                      windows_to_layer = layers[[i]], 
-                                                      CG_table = atomic_layer,
-                                                      FDR_scaler=fdrscaler,
-                                                      lookup_table = cltable)
-              built_layers[[i]] <- in_layer_merge(dmrs = built_layers[[i]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
-              built_layers[[i]] <- in_layer_merge(dmrs = built_layers[[i]], CG_table = atomic_layer, FDR_scaler = fdrscaler, lookup_table = cltable)
-              built_layers[[i]] <- trim_layer(dmrs = built_layers[[i]], CG_table = atomic_layer, FDR_scaler = 2, lookup_table = cltable)
-               # print("done with one")
-              }
+              dmrscaler_result <- dmrscaler::dmrscaler(locs = data, fdrscaler = fdrscaler, cltable=cltable, layer_sizes = layer_sizes)
+              built_layers <- dmrscaler_result
         
         ## {r  pair simulated with called regions }
         #### Want: real, simulated (potentially many:many)
@@ -866,6 +495,39 @@ for(RUN in 1:3){
         
         
         
+        
+        
+        
+        
+        ################# COMB-P ###################
+        ## Set up bed file
+        combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,stop=locs$pos+1,pval=10^-mwr$p_val)
+        combp_input_bed <- combp_input_bed[order(combp_input_bed$chrom),]
+        ## fails if: comma seperates, ordered numerically instead of by character e.g. chr2 < chr10 -> F, needs bedtools installed command line
+        ##           FINALLY WORKING :,(  --->  :,)
+        data.table::fwrite(combp_input_bed, file = "./intermediate_data_2/combp_temp_input.bed", row.names = F,col.names = T, sep = "\t") ### Takes < 2 sec :) lol what
+        ## Pass bed file into comb-p
+        Sys.time()
+        system("comb-p pipeline -c 4 --dist 1000 --seed 1e-3 -p ./intermediate_data_2/test1k --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
+        Sys.time()
+        system("comb-p pipeline -c 4 --dist 10000 --seed 1e-3 -p ./intermediate_data_2/test10k --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
+        Sys.time()
+        system("comb-p pipeline -c 4 --dist 100000 --seed 1e-3 -p ./intermediate_data_2/test100k --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
+        Sys.time()
+        system("comb-p pipeline -c 4 --dist 1000000 --seed 1e-3 -p ./intermediate_data_2/test1000k --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
+        Sys.time()
+
+        ## Parse comb-p resuults into the CALLED_TP_FP and the MAPPING VALUES tables
+        combp_results <- data.table::fread("./intermediate_data_2/test.regions-t.bed")
+        
+        ###### Next add comb-p to simulation results
+        ###### Add table to report timing statistics for each method ?? 
+        library(ENmix)
+        ENmix::combp(combp_input_bed)
+        
+        
+        
+        
         ####
         
         
@@ -883,6 +545,14 @@ for(RUN in 1:3){
 #1- (sum((log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) )^2 ) /sum((log10(WIDTH_PAIRS$called_width)-a)^2 )) ## R squared
 
 ```
+
+
+```{r}
+
+
+
+```
+
 
 
 ```{r}
@@ -959,6 +629,7 @@ gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
   scale_y_continuous(labels = percent ) +
   ylab("Percent of Simulated DMRs")+
+  scale_y_continuous(breaks = seq(0,1,0.1))+
   xlab("-log10(Mapping value) ")+
   theme_bw()+
   theme(
@@ -973,7 +644,7 @@ gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   facet_grid(. ~ method )#, labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_",  "mapping_ratios.png", sep = "")
+filename<-paste(results_dir, date, "_",  "2_mapping_ratios.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)

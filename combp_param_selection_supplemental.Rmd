@@ -73,11 +73,11 @@ CALLED_TP_FP <- data.frame("method"=character(), "params"=character(),
 
 TIME <- data.frame("method"=character(), "params"=character(),"time"=numeric())
 
-combp_params <- data.frame("dist" = c(1e3,1e3,1e4), #,1e4,1e5,1e5,1e6,1e6,1e6),
-                           "step" = c(1e2,5e2,5e2), #,1e3,1e3,1e4,5e3,1e4,1e5),
+combp_params <- data.frame("dist" = c(1e3,1e3,1e4,1e4,1e5,1e5,1e6,1e6,1e6),
+                           "step" = c(1e2,5e2,5e2,1e3,1e3,1e4,5e3,1e4,1e5),
                            "time" = NA)
 
-for(RUN in 1:2){
+for(RUN in 1:3){
         ## delta_beta = artificial inflation of beta values between groups
         ## num_samples = number of samples for each group
         ## noise = proportion of cgs in DMR that are not to have an altered beta value
@@ -158,6 +158,11 @@ for(RUN in 1:2){
         length(is.element(rownames(B_mod)[which(rowMeans(as.matrix(B_test))-rowMeans(as.matrix(B_mod)) < -0.1)], locs$names[which(locs$in_dmr==1)]))
      
         
+        mwr <- dmrscaler::run_MWW(control_indices = which(colnames(B_mod)==g1) ,
+                                        case_indices = which(colnames(B_mod)==g2),
+                                        Beta = B_mod)
+        mwr <- -log10(mwr)
+        
         ## {r  pair simulated with called regions }
         #### Want: real, simulated (potentially many:many)
         #### Want: DMRs  -2 -1 0 1 2 log10 DMRs called/ DMR simulated (for each DMR simulated count overlapping called DMRs + for each DMR called count overlapping called DMRs (map all to simulated DMRs, take max, record sign))
@@ -194,7 +199,7 @@ for(RUN in 1:2){
           t2 <- Sys.time()
           TIME <- rbind(TIME, data.frame("method" = "comb-p",
                                          "params" = paste("dist=",combp_params$dist[param_index],";step=",combp_params$step[param_index]),
-                                         "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+                                         "time"=as.numeric(difftime(t1,t2, units="secs")) ) )
   
           ## Parse comb-p resuults into the CALLED_TP_FP and the MAPPING VALUES tables
           combp_results <- data.table::fread("./intermediate_data_2/test.regions-t.bed")
@@ -298,9 +303,9 @@ for(RUN in 1:2){
         
         
 }
-write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_WIDTH_PAIRS.csv"),sep = "")
-write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_MAPPING_VALUES.csv"),sep="")
-write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"combp_param_test_CALLED_TP_FP.csv"),sep="")
+write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"FULL_combp_param_test_WIDTH_PAIRS.csv",sep = ""))
+write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"FULL_combp_param_test_MAPPING_VALUES.csv",sep=""))
+write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),"FULL_combp_param_test_CALLED_TP_FP.csv",sep="") )
 
 #hist(log10(WIDTH_PAIRS$simulated_width))
 #plot(log10(WIDTH_PAIRS$simulated_width),log10(WIDTH_PAIRS$called_width))
@@ -308,5 +313,118 @@ write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),
 #plot((log10(WIDTH_PAIRS$simulated_width)), (log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) ) )
 
 #1- (sum((log10(WIDTH_PAIRS$called_width)-log10(WIDTH_PAIRS$simulated_width) )^2 ) /sum((log10(WIDTH_PAIRS$called_width)-a)^2 )) ## R squared
+
+```
+
+#Write comb-p parameter testing results
+```{r}
+library(ggExtra)
+## Make simul v called plots in grid
+
+labels <- character(length = length(unique(WIDTH_PAIRS$params)))
+names(labels)<-unique(WIDTH_PAIRS$params)
+for(i in 1:length(labels)){
+  which <- which(WIDTH_PAIRS$params == unique(WIDTH_PAIRS$params)[i])
+  cor <- cor(log10(WIDTH_PAIRS$simulated_width[which]), log10(WIDTH_PAIRS$called_width[which]))
+  labels[i] <- paste(unique(WIDTH_PAIRS$params)[i], " \n(Pearson's R = ", round(cor,2), ")", sep = "" )
+}
+
+
+gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) +
+    xlab("log10( Simulated DMR Width )")+
+    ylab("log10( Called DMR Width )")+
+    stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
+    geom_point(size=0.01, alpha=0.4)+
+    scale_fill_gradient(low="grey70", high="grey20")+
+    #scale_fill_gradient(low="white", high="red")+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=6),
+      strip.text = element_text(face="bold", size=6, angle=0),
+      axis.text = element_text(face="bold", size=6, angle=0),
+      legend.position = "none"
+    )+
+    facet_grid( ~ params, labeller=labeller(method = labels))
+  gg
+  
+  filename <- paste("./results/",format(Sys.time(),"%Y-%m-%d"), "combp_params_simul_v_call_width" , ".tiff",sep="")
+  #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+  #grid.arrange(gg, ncol=1)
+  #dev.off()
+  ggsave( filename=filename, plot = gg, device = "tiff", path = NULL,
+    scale = 1, width = 6, height = 2.5, units = c("in"), dpi = 320)
+
+
+
+
+
+
+
+## Make Mapping value plots (these also show missing proportion)
+
+
+
+## Make table of params and cor
+
+## done
+
+
+
+
+
+dm_methods <- as.character(unique(WIDTH_PAIRS$method))
+date <- format(Sys.Date(), format="%Y_%m_%d")
+
+
+## SIMULATED WIDTH V CALLED WIDTH PLOTS
+
+
+
+##  
+
+
+
+### MAPPING VALUES PLOT
+simul_count <- 200
+gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
+  #ggtitle("simulated v called dmr length log10")+
+  geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
+  scale_y_continuous(labels = percent ) +
+  ylab("Percent of Simulated DMRs")+
+  scale_y_continuous(breaks = seq(0,1,0.1))+
+  xlab("-log10(Mapping value) ")+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=6),
+    strip.text = element_text(face="bold", size=6, angle=0),
+    axis.text = element_text(face="bold", size=6, angle=0),
+    legend.position = "none"
+  )+
+  facet_grid(. ~ method )#, labeller=labeller(method = labels) )
+gg
+
+filename<-paste(results_dir, date, "_",  "2_mapping_ratios.png", sep = "")
+#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+
+#grid.arrange(gg, ncol=1)
+#dev.off()
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 4,
+  height = 3,
+  units = c("in"),
+  dpi = 320
+)
+
 
 ```

@@ -318,8 +318,25 @@ write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d"),
 
 #Write comb-p parameter testing results
 ```{r}
+
+TIME$dist <- as.numeric(str_split(TIME$params, pattern = "[=;]",simplify = T)[,2])
+TIME$step <- as.numeric(str_split(TIME$params, pattern = "[=;]",simplify = T)[,4])
+CALLED_TP_FP$dist <- as.numeric(str_split(CALLED_TP_FP$params, pattern = "[=;]",simplify = T)[,2])
+CALLED_TP_FP$step <- as.numeric(str_split(CALLED_TP_FP$params, pattern = "[=;]",simplify = T)[,4])
+MAPPING_VALUES$dist <- as.numeric(str_split(MAPPING_VALUES$params, pattern = "[=;]",simplify = T)[,2])
+MAPPING_VALUES$step <- as.numeric(str_split(MAPPING_VALUES$params, pattern = "[=;]",simplify = T)[,4])
+WIDTH_PAIRS$dist <- as.numeric(str_split(WIDTH_PAIRS$params, pattern = "[=;]",simplify = T)[,2])
+WIDTH_PAIRS$step <- as.numeric(str_split(WIDTH_PAIRS$params, pattern = "[=;]",simplify = T)[,4])
+
+WIDTH_PAIRS$params <- factor(WIDTH_PAIRS$params, levels=levels(factor(WIDTH_PAIRS$params))[c(1:6,9,7,8)] )
+MAPPING_VALUES$params <- factor(MAPPING_VALUES$params, levels=levels(factor(MAPPING_VALUES$params))[c(1:6,9,7,8)] )
+
+
 library(ggExtra)
 ## Make simul v called plots in grid
+## SIMULATED WIDTH V CALLED WIDTH PLOTS
+
+
 
 labels <- character(length = length(unique(WIDTH_PAIRS$params)))
 names(labels)<-unique(WIDTH_PAIRS$params)
@@ -334,7 +351,8 @@ gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) 
     xlab("log10( Simulated DMR Width )")+
     ylab("log10( Called DMR Width )")+
     stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
-    geom_point(size=0.01, alpha=0.4)+
+    geom_abline(slope=1, intercept = 0, size=0.5, alpha=0.5)+
+    geom_point(size=0.1, alpha=0.6)+
     scale_fill_gradient(low="grey70", high="grey20")+
     #scale_fill_gradient(low="white", high="red")+
     theme_bw()+
@@ -342,54 +360,29 @@ gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) 
       plot.background = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      text=element_text(face="bold", size=6),
-      strip.text = element_text(face="bold", size=6, angle=0),
-      axis.text = element_text(face="bold", size=6, angle=0),
+      text=element_text(face="bold", size=4),
+      strip.text = element_text(face="bold", size=4, angle=0),
+      axis.text = element_text(face="bold", size=4, angle=0),
       legend.position = "none"
     )+
-    facet_grid( ~ params, labeller=labeller(method = labels))
+    facet_grid( . ~ params, labeller=labeller(params = labels))
   gg
   
-  filename <- paste("./results/",format(Sys.time(),"%Y-%m-%d"), "combp_params_simul_v_call_width" , ".tiff",sep="")
+  filename <- paste("./results/",format(Sys.time(),"%Y-%m-%d"), "combp_params_simul_v_call_width" , ".png",sep="")
   #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
   #grid.arrange(gg, ncol=1)
   #dev.off()
-  ggsave( filename=filename, plot = gg, device = "tiff", path = NULL,
-    scale = 1, width = 6, height = 2.5, units = c("in"), dpi = 320)
-
-
-
-
+  ggsave( filename=filename, plot = gg, device = "png", path = NULL,
+    scale = 1, width = 8, height = 2, units = c("in"), dpi = 320)
 
 
 
 ## Make Mapping value plots (these also show missing proportion)
 
-
-
-## Make table of params and cor
-
-## done
-
-
-
-
-
-dm_methods <- as.character(unique(WIDTH_PAIRS$method))
-date <- format(Sys.Date(), format="%Y_%m_%d")
-
-
-## SIMULATED WIDTH V CALLED WIDTH PLOTS
-
-
-
-##  
-
-
-
+library(scales)
 ### MAPPING VALUES PLOT
-simul_count <- 200
-gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
+simul_count <- 600
+gg <- ggplot(MAPPING_VALUES, aes(x=log10(mapping_value))) +
   #ggtitle("simulated v called dmr length log10")+
   geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
   scale_y_continuous(labels = percent ) +
@@ -401,30 +394,21 @@ gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
     plot.background = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    text=element_text(face="bold", size=6),
-    strip.text = element_text(face="bold", size=6, angle=0),
-    axis.text = element_text(face="bold", size=6, angle=0),
+    text=element_text(face="bold", size=4),
+    strip.text = element_text(face="bold", size=4, angle=0),
+    axis.text = element_text(face="bold", size=4, angle=0),
     legend.position = "none"
   )+
-  facet_grid(. ~ method )#, labeller=labeller(method = labels) )
+  facet_grid(. ~ params )#, labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_",  "2_mapping_ratios.png", sep = "")
+filename <- paste("./results/",format(Sys.time(),"%Y-%m-%d"), "combp_params_mapping_values" , ".png",sep="")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
-
 #grid.arrange(gg, ncol=1)
 #dev.off()
-ggsave(
-  filename=filename,
-  plot = gg,
-  device = "png",
-  path = NULL,
-  scale = 1,
-  width = 4,
-  height = 3,
-  units = c("in"),
-  dpi = 320
-)
+ggsave( filename=filename, plot = gg, device = "png", path = NULL,
+  scale = 1, width = 8, height = 2, units = c("in"), dpi = 320)
+
 
 
 ```

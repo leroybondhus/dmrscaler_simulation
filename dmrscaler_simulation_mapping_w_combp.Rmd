@@ -33,9 +33,9 @@ library(gridExtra)
 
 library(DMRcate)
 document("/home/leroy/Desktop/PROJECTS/dmrscaler")
-install("/home/leroy/Desktop/PROJECTS/dmrscaler", quiet=T)
+install("/home/leroy/Desktop/PROJECTS/dmrscaler", quick=T)
 
-results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
+results_dir <-paste(getwd(), "/results_2/",sep = "")
 ```
 
 
@@ -84,7 +84,7 @@ for(RUN in 1:5){
         ## num_samples = number of samples for each group
         ## noise = proportion of cgs in DMR that are not to have an altered beta value
         ## dmr_buffer = number of non-dmr cgs to enforce between each artificial dmr
-        
+        print(paste("RUN IS :",RUN))
         pars <- data.frame("delta_beta" = 0.2, "num_samples" = 8, "noise" = 0.5, "dmr_buffer" = 10) 
         
         
@@ -157,11 +157,7 @@ for(RUN in 1:5){
           }
         }
         
-        B_test <- B[,g12]
-        hist(as.matrix(B_test)-as.matrix(B_mod)) 
-        
-        length(is.element(rownames(B_mod)[which(rowMeans(as.matrix(B_test))-rowMeans(as.matrix(B_mod)) < -0.1)], locs$names[which(locs$in_dmr==1)]))
-        
+
         ## {r}
               
               ############################     run everything         #########################
@@ -198,6 +194,7 @@ for(RUN in 1:5){
             #  data$chr <- droplevels(data$chr)
               layer_sizes <- c(2,4,8,16,32,64)
               layers<-list()
+            print(paste("On to dmrscaler RUN IS :",RUN))
               
               t1 <- Sys.time() 
               dmrscaler_result <- dmrscaler::dmrscaler(locs = data, fdrscaler = fdrscaler, cltable=cltable, layer_sizes = layer_sizes)
@@ -205,7 +202,7 @@ for(RUN in 1:5){
               t2 <- Sys.time()
               TIME <- rbind(TIME, data.frame("method" = "dmrscaler",
                                "params" = "default",
-                               "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+                               "time"=as.numeric(difftime(t2,t1, units="secs")) ) )
         
         ## {r  pair simulated with called regions }
         #### Want: real, simulated (potentially many:many)
@@ -237,8 +234,8 @@ for(RUN in 1:5){
         
         ## basis for generating simul_length vs called_length plot
         overlaps <- findOverlaps(simul_grs, called_grs)
-        plot(log10(simul_grs@ranges@width[overlaps@from]), log10(called_grs@ranges@width[overlaps@to]))
-        cor( log10(simul_grs@ranges@width[overlaps@from]),log10(called_grs@ranges@width[overlaps@to]))
+       # plot(log10(simul_grs@ranges@width[overlaps@from]), log10(called_grs@ranges@width[overlaps@to]))
+       # cor( log10(simul_grs@ranges@width[overlaps@from]),log10(called_grs@ranges@width[overlaps@to]))
         ### write pairs of simul_width and called_width. To plot: plot log10 transformed widths  
         WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "DMRscaler",
                                                      "params" = "default" ,
@@ -322,7 +319,7 @@ for(RUN in 1:5){
         ## error plots (missed dmrs and edge error for called dmrs)
         ####  trim edge to improve
         #### 
-
+        print(paste("On to bumphunter RUN IS :",RUN))
                             ##   BUMPHUNTER  ##
         design<-rep(-1,length(colnames(B_mod)))
         design[which(is.element(colnames(B_mod),g1))]<-1
@@ -332,7 +329,7 @@ for(RUN in 1:5){
         t2 <- Sys.time()
         TIME <- rbind(TIME, data.frame("method" = "bumphunter",
                            "params" = "maxGap=1e6,cutoff=0.1",
-                           "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+                           "time"=as.numeric(difftime(t2,t1, units="secs")) ) )
         
         temp_names <- paste("called", bumps4$table$chr, bumps4$table$start, sep = "_")
         called_grs <- GRanges(
@@ -342,7 +339,7 @@ for(RUN in 1:5){
         )
         called_grs$pval <- bumps4$table$p.value
         overlaps <- findOverlaps(simul_grs, called_grs)
-        plot(log10(simul_grs@ranges@width[overlaps@from]), log10(called_grs@ranges@width[overlaps@to]))
+      #  plot(log10(simul_grs@ranges@width[overlaps@from]), log10(called_grs@ranges@width[overlaps@to]))
         WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "bumphunter",
                                              "params" = "maxGap=1e6,cutoff=0.1" ,
                                              "simulated_width"=simul_grs@ranges@width[overlaps@from],
@@ -418,7 +415,7 @@ for(RUN in 1:5){
         ################################
         ####
         
-        
+        print(paste("On to dmrcate RUN IS :",RUN))
         ##dmrcate##
         design<-rep(-1,length(colnames(B_mod)))
         design[which(is.element(colnames(B_mod),g1))]<-1
@@ -434,7 +431,7 @@ for(RUN in 1:5){
         t2 <- Sys.time()
         TIME <- rbind(TIME, data.frame("method" = "DMRcate",
                            "params" = "lambda=1e6_C=2000",
-                           "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+                           "time"=as.numeric(difftime(t2,t1, units="secs")) ) )
         
         
         
@@ -462,7 +459,7 @@ for(RUN in 1:5){
         names(count_called_per_simul) <- simul_grs@ranges@NAMES
         
         for(i in 1:length(simul_grs)){
-          print(i)
+         # print(i)
           if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
           
           which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
@@ -522,7 +519,7 @@ for(RUN in 1:5){
         
         
         
-        
+        print(paste("On to combp RUN IS :",RUN))        
         ################# COMB-P ###################
         ## Set up bed file
         combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,end=locs$pos+1,pval=10^-mwr$p_val)
@@ -532,11 +529,11 @@ for(RUN in 1:5){
         ## Pass bed file into comb-p
 
         t1 <- Sys.time()
-        system("comb-p pipeline -c 4 --dist 1000000 --step 1000 --seed 1e-3 -p ./intermediate_data_2/test --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
+        system("comb-p pipeline -c 4 --dist 1000000 --step 5000 --seed 1e-3 -p ./intermediate_data_2/test --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
         t2 <- Sys.time()
         TIME <- rbind(TIME, data.frame("method" = "combp",
-                           "params" = "dist=1e6_step=1e3",
-                           "time"=as.numeric(difftime(t1,t2, "secs")) ) )
+                           "params" = "dist=1000_step=100",
+                           "time"=as.numeric(difftime(t2,t1, units="secs")) ) )
         
         
 
@@ -556,7 +553,7 @@ for(RUN in 1:5){
           overlaps <- findOverlaps(simul_grs, called_grs)
           
           WIDTH_PAIRS <- rbind(WIDTH_PAIRS, data.frame("method" = "comb-p",
-                                               "params" = "dist=1e6_step=1e3"  ,
+                                               "params" = "dist=1e6_step=5e3"  ,
                                                "simulated_width"=simul_grs@ranges@width[overlaps@from],
                                                "called_width"=called_grs@ranges@width[overlaps@to],
                                                "run"=RUN))
@@ -572,7 +569,7 @@ for(RUN in 1:5){
           names(count_called_per_simul) <- simul_grs@ranges@NAMES
           
           for(i in 1:length(simul_grs)){
-            print(i)
+           # print(i)
             if(!is.element(i, overlaps@from)){ count_called_per_simul[i] <- 0; next;}
             
             which <- overlaps@to[which(overlaps@from==i)]  ## select rows of overlaps corresponding to simulated dmr
@@ -596,7 +593,7 @@ for(RUN in 1:5){
   
           ### save count_called_per_simul vector. To plot : density of log10 values.
           MAPPING_VALUES <- rbind(MAPPING_VALUES, data.frame("method" = "comb-p",
-                                                             "params" = "dist=1e6_step=1e3" ,
+                                                             "params" = "dist=1e6_step=5e3" ,
                                                              "simul_chr"=simul_dmrs$chr, 
                                                              "simul_start"=simul_dmrs$pos, 
                                                              "simul_width"=simul_dmrs$length,
@@ -617,7 +614,7 @@ for(RUN in 1:5){
           }
           
           CALLED_TP_FP <- rbind(CALLED_TP_FP, data.frame("method" = "combp",
-                                                         "params" = "dist=1e6_step=1e3" ,
+                                                         "params" = "dist=1e6_step=5e3" ,
                                                          "called_chr"=as.character(called_grs@seqnames),
                                                          "called_start"=called_grs@ranges@start,
                                                          "called_width"=called_grs@ranges@width,
@@ -683,10 +680,10 @@ gg <- ggplot(WIDTH_PAIRS[which(WIDTH_PAIRS$called_width > 1),], aes(x=log10(simu
   #ggtitle("simulated v called dmr length log10")+
   xlab("log10( Simulated DMR Width )")+
   ylab("log10( Called DMR Width )")+
+  geom_abline(slope = 1, intercept = 0,size=0.2,alpha=0.6)+
   stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
-  geom_point(size=0.01, alpha=0.4)+
+  geom_point(size=0.15, alpha=0.3)+
   scale_fill_gradient(low="grey70", high="grey20")+
-  #scale_fill_gradient(low="white", high="red")+
   theme_bw()+
   theme(
     plot.background = element_blank(),
@@ -700,7 +697,7 @@ gg <- ggplot(WIDTH_PAIRS[which(WIDTH_PAIRS$called_width > 1),], aes(x=log10(simu
   facet_grid(. ~ method, labeller=labeller(method = labels))
 gg
 
-filename<-paste(results_dir, date, "_ggsave666_",  "sim_v_called_width.tiff", sep = "")
+filename<-paste(results_dir, date, "_ggsave_",  "sim_v_called_width.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)
@@ -708,7 +705,7 @@ filename<-paste(results_dir, date, "_ggsave666_",  "sim_v_called_width.tiff", se
 ggsave(
   filename=filename,
   plot = gg,
-  device = "tiff",
+  device = "png",
   path = NULL,
   scale = 1,
   width = 6,
@@ -722,9 +719,9 @@ ggsave(
 ##  
 
 
-
+library(scales)
 ### MAPPING VALUES PLOT
-simul_count <- 200
+simul_count <- 1000
 gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   #ggtitle("simulated v called dmr length log10")+
   geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
@@ -745,7 +742,7 @@ gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   facet_grid(. ~ method )#, labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_",  "2_mapping_ratios.png", sep = "")
+filename<-paste(results_dir, date, "_",  "mapping_ratios.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)

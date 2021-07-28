@@ -412,3 +412,134 @@ ggsave( filename=filename, plot = gg, device = "png", path = NULL,
 
 
 ```
+
+
+```{r AUCPR+ROC curves}
+## one measure raw bp length
+## one measure feature count
+
+## raw bp length
+
+P_R <- list() 
+for(m in unique(CALLED_TP_FP$method)){
+  which <- which(CALLED_TP_FP$method == m)
+  temp <- CALLED_TP_FP[which,]
+  temp_MV <- MAPPING_VALUES[which(MAPPING_VALUES$method==m),]
+  
+  if(m == "DMRscaler"){ temp$pval <- 10^(-temp$pval)} ## DMRscaler stored a score that is near mean -log10 pvalue, want to reverse order
+  temp <- temp[order(temp$pval),]
+  P_R[[m]]<-data.frame("P_feature"=numeric(length = nrow(temp)),
+                  "R_feature"=numeric(length = nrow(temp)),
+                  "P_bp"=numeric(length = nrow(temp)),
+                  "R_bp"=numeric(length = nrow(temp)))
+  Simul_TP_FN <- data.frame("TPfeature" = rep(0,nrow(temp_MV)) ,
+                          "FNfeature" = rep(1,nrow(temp_MV)),
+                          "TPbp" = rep(0,nrow(temp_MV)),
+                          "FNbp" = temp_MV$simul_width,
+                          "fullbp" = temp_MV$simul_width)
+  simul_grs <- GRanges(
+      seqnames = paste("r",temp_MV$run,
+                       temp_MV$simul_chr,sep = "_"),
+      ranges = IRanges(start = temp_MV$simul_start,
+                       width = temp_MV$simul_width),
+      strand = rep("*", nrow(temp_MV))
+    )
+  for(i in 1:nrow(temp)){   ### 1:i is going to slow things down... incremental operator?
+    ## update Simul_TP_FN
+    called_grs <- GRanges(
+      seqnames = paste("r",temp$run[1:i], temp$called_chr[1:i],sep = "_"),
+      ranges = IRanges(start = temp$called_start[1:i], width = temp$called_width[1:i]),
+      strand = rep("*", nrow(temp[1:i,]))
+    )
+    cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
+    cs_overlap <- findOverlaps(simul_grs, cs_intersect )
+    for(j in 1:length(simul_grs)){
+      if(!is.element(j, cs_overlap@from)){ TP[j] <- 0; FN[i] <- 1;  next;}
+      which2<-cs_overlap@to[which(cs_overlap@from==j)]
+      Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
+      Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
+      # Simul_TP_FN$FNfeature <- 1 - Simul_TP_FN$TPfeature
+    }
+    ##
+    Simul_TP_FN$FNfeature <- 1 - Simul_TP_FN$TPfeature
+    Simul_TP_FN$TPbp <- Simul_TP_FN$fullbp - (Simul_TP_FN$FNfeature * Simul_TP_FN$fullbp)
+    Simul_TP_FN$FNbp <- Simul_TP_FN$fullbp - Simul_TP_FN$TPbp
+    
+    P_R[[m]]$P_feature[i] <- mean(temp$TP.[1:i]) ##  TP/(TP+FP) where each feauture is equally weighted, TP+FP = 1/ called DMR, TP+FP = # DMR called
+    P_R[[m]]$R_feature[i] <- mean(Simul_TP_FN$TPfeature)
+    temp_TP_sum <- sum(temp$TP.[1:i] * temp$called_width[1:i])
+    temp_FP_sum <- sum(temp$FP.[1:i] * temp$called_width[1:i])
+    P_R[[m]]$P_bp[i] <- temp_TP_sum / (temp_TP_sum + temp_FP_sum )
+    P_R[[m]]$R_bp[i] <- sum(Simul_TP_FN$TPbp) / sum(Simul_TP_FN$fullbp)
+    
+    
+  }
+  
+}
+
+for(m in names(P_R)){
+  max_R_feature <- max(P_R[[m]]$R_feature)
+  max_R_bp <- max(P_R[[m]]$R_bp)
+  P_R[[m]]<-rbind(P_R[[m]], data.frame(
+    "P_feature" = 0,
+    "R_feature" = max_R_feature,
+    "P_bp" = 0,
+    "R_bp" = max_R_bp
+  ))
+}
+
+auc <- list("DMRscaler"=data.frame(),"bumphunter"=data.frame(),"DMRcate"=data.frame())
+for(m in names(auc)){
+  auc[[m]]<-data.frame(
+    "feature_auc" = auc(P_R[[m]]$R_feature, P_R[[m]]$P_feature),
+    "bp_auc" = auc(P_R[[m]]$R_bp, P_R[[m]]$P_bp)
+  )
+}
+
+df_temp <- data.frame()
+for(i in 1:length(P_R)){
+  df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(paste(names(P_R)[i]) ))) #, "\nAUC = ",round(auc[[i]]$feature_auc,2), sep = "" ))  )) 
+}
+
+gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
+  ggtitle("Precision-Recall feature")+
+  labs(subtitle = paste(
+         "DMRscaler AUC=", round(auc[["DMRscaler"]]$feature_auc,3),
+         ", Bumphunter AUC=", round(auc[["bumphunter"]]$feature_auc,3),
+         ", DMRcate AUC=", round(auc[["DMRcate"]]$feature_auc,3)
+         ))+
+  xlab("Recall")+
+  ylab("Precision")+
+  geom_path(aes(linetype=method), size=0.5)+
+  xlim(0,1)+
+  ylim(0,1)+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=6),
+    strip.text = element_text(face="bold", size=6, angle=0),
+    axis.text = element_text(face="bold", size=6, angle=0)
+  )
+
+filename<-paste(results_dir, date, "_",  "AUCPR_feature.tiff", sep = "")
+#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+
+#grid.arrange(gg, ncol=1)
+#dev.off()
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "tiff",
+  path = NULL,
+  scale = 1,
+  width = 4,
+  height = 3,
+  units = c("in"),
+  dpi = 320
+)
+
+
+
+```

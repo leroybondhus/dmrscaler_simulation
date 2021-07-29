@@ -672,7 +672,7 @@ names(labels)<-dm_methods
 for(i in 1:length(dm_methods)){
   which <- which(WIDTH_PAIRS$method == dm_methods[i])
   cor <- cor(log10(WIDTH_PAIRS$simulated_width[which]), log10(WIDTH_PAIRS$called_width[which]))
-  labels[i] <- paste(dm_methods[i], " (Pearson's R = ", round(cor,2), ")", sep = "" )
+  labels[i] <- paste(dm_methods[i], " (Pearson's R = ", round(cor,2), ")", sep="")   #\n", unique(WIDTH_PAIRS$params[which]), sep = "" )
   names(labels[i])<-dm_methods[i]
 }
 
@@ -694,10 +694,11 @@ gg <- ggplot(WIDTH_PAIRS[which(WIDTH_PAIRS$called_width > 1),], aes(x=log10(simu
     axis.text = element_text(face="bold", size=6, angle=0),
     legend.position = "none"
   )+
-  facet_grid(. ~ method, labeller=labeller(method = labels))
+  #facet_grid( method ~ . , labeller=labeller(method = labels))
+  facet_wrap(. ~ method, ncol = 1 , labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_ggsave_",  "sim_v_called_width.png", sep = "")
+filename<-paste(results_dir, date, "_ggsave_",  "sim_v_called_width_vert.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)
@@ -708,8 +709,8 @@ ggsave(
   device = "png",
   path = NULL,
   scale = 1,
-  width = 6,
-  height = 2.5,
+  width = 2.5,
+  height = 6,
   units = c("in"),
   dpi = 320
 )
@@ -719,12 +720,32 @@ ggsave(
 ##  
 
 
+
 library(scales)
 ### MAPPING VALUES PLOT
 simul_count <- 1000
+for(m in unique(MAPPING_VALUES2$method)){
+  MAPPING_VALUES2$frac_covered <- cumsum(MAPPING_VALUES2$mapping_value[which(MAPPING_VALUES2$method==m)])/simul_count
+}
+
+p <-  ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
+  geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
+  facet_wrap(. ~ method, ncol = 1 )
+dat <-  ggplot_build(p)$data[[1]]
+dat$PANEL <- factor(dat$PANEL); levels(dat$PANEL)<-levels(factor(MAPPING_VALUES2$method))
+dat$method <- dat$PANEL; dat$method <- as.character(dat$method)
+dat$cumsum <- numeric(length=nrow(dat))
+for(p in unique(dat$PANEL) ){
+  dat$cumsum[which(dat$PANEL==p)] <- cumsum(dat$y[which(dat$PANEL==p)]) 
+}
+ggplot(dat, aes(x=x, y=cumsum))+
+  geom_line()+facet_wrap(~ as.character(PANEL))
+
 gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   #ggtitle("simulated v called dmr length log10")+
   geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
+  geom_line(data = dat, aes(x=x,y=cumsum))+
+#  stat_bin(aes(y=cumsum(stat(count)/ simul_count) ),geom="line",color="green")+
   scale_y_continuous(labels = percent ) +
   ylab("Percent of Simulated DMRs")+
   scale_y_continuous(breaks = seq(0,1,0.1))+
@@ -739,10 +760,11 @@ gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
     axis.text = element_text(face="bold", size=6, angle=0),
     legend.position = "none"
   )+
-  facet_grid(. ~ method )#, labeller=labeller(method = labels) )
+  #facet_grid( method ~ . , labeller=labeller(method = labels))
+  facet_wrap(. ~ method, ncol = 1 )# , labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_",  "mapping_ratios.png", sep = "")
+filename<-paste(results_dir, date, "_",  "mapping_ratios_vert.tiff", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)
@@ -750,14 +772,15 @@ filename<-paste(results_dir, date, "_",  "mapping_ratios.png", sep = "")
 ggsave(
   filename=filename,
   plot = gg,
-  device = "png",
+  device = "tiff",
   path = NULL,
   scale = 1,
-  width = 4,
-  height = 3,
+  width = 2,
+  height = 6,
   units = c("in"),
   dpi = 320
 )
+
 
 ```
 
@@ -856,7 +879,8 @@ gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
   labs(subtitle = paste(
          "DMRscaler AUC=", round(auc[["DMRscaler"]]$bp_auc,3),
          ", Bumphunter AUC=", round(auc[["bumphunter"]]$bp_auc,3),
-         ", DMRcate AUC=", round(auc[["DMRcate"]]$bp_auc,3)
+         ", DMRcate AUC=", round(auc[["DMRcate"]]$bp_auc,3),
+         ", Comb-p AUC=", round(auc[["combp"]]$bp_auc,3)
          ))+
   xlab("Recall")+
   ylab("Precision")+
@@ -882,18 +906,36 @@ filename<-paste(results_dir, date, "_",  "AUCPR_bp.png", sep = "")
 #grid.arrange(gg, ncol=1)
 #dev.off()
 ggsave(
-  filename=filename,
-  plot = gg,
-  device = "png",
-  path = NULL,
-  scale = 1,
-  width = 4,
-  height = 3,
-  units = c("in"),
-  dpi = 320
+  filename=filename, plot = gg, device = "png", path = NULL, scale = 1,
+  width = 4, height = 3, units = c("in"), dpi = 320
 )
 
 
+
+## plot time ##
+TIME$time2 <- TIME$time
+gg<- ggplot(TIME, aes(x = paste(method,"\n",params) , y = log10(time)))+
+  ggtitle("Method runtimes")+
+  geom_point()+
+  geom_boxplot(alpha=0)+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=6),
+    strip.text = element_text(face="bold", size=6, angle=0),
+    axis.text = element_text(face="bold", size=6),
+    axis.text.x = element_text(angle=45, hjust=0.80)
+  )
+gg
+
+filename<-paste(results_dir, date, "_",  "methods_time.png", sep = "")
+
+ggsave(
+  filename=filename, plot = gg, device = "png", path = NULL, scale = 1,
+  width = 3, height = 3, units = c("in"), dpi = 320
+)
 
 ```
 

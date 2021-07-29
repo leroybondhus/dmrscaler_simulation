@@ -743,12 +743,13 @@ ggplot(dat, aes(x=x, y=cumsum))+
 
 gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   #ggtitle("simulated v called dmr length log10")+
-  geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
   geom_line(data = dat, aes(x=x,y=cumsum))+
+  geom_histogram(aes(y = stat(count) / simul_count ),color="black", fill="grey60", bins = 50)+
 #  stat_bin(aes(y=cumsum(stat(count)/ simul_count) ),geom="line",color="green")+
   scale_y_continuous(labels = percent ) +
   ylab("Percent of Simulated DMRs")+
   scale_y_continuous(breaks = seq(0,1,0.1))+
+  scale_x_continuous(breaks = seq(-1,max(log10(MAPPING_VALUES2$mapping_value)),0.5))+
   xlab("-log10(Mapping value) ")+
   theme_bw()+
   theme(
@@ -764,7 +765,7 @@ gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   facet_wrap(. ~ method, ncol = 1 )# , labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_",  "mapping_ratios_vert.tiff", sep = "")
+filename<-paste(results_dir, date, "_",  "mapping_ratios_vert.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)
@@ -772,7 +773,7 @@ filename<-paste(results_dir, date, "_",  "mapping_ratios_vert.tiff", sep = "")
 ggsave(
   filename=filename,
   plot = gg,
-  device = "tiff",
+  device = "png",
   path = NULL,
   scale = 1,
   width = 2,
@@ -930,11 +931,11 @@ gg<- ggplot(TIME, aes(x = paste(method,"\n",params) , y = log10(time)))+
   )
 gg
 
-filename<-paste(results_dir, date, "_",  "methods_time.png", sep = "")
+filename<-paste(results_dir, date, "_",  "methods_time_flat.png", sep = "")
 
 ggsave(
   filename=filename, plot = gg, device = "png", path = NULL, scale = 1,
-  width = 3, height = 3, units = c("in"), dpi = 320
+  width = 6, height = 3, units = c("in"), dpi = 320
 )
 
 ```

@@ -911,11 +911,12 @@ ggsave(
   width = 4, height = 3, units = c("in"), dpi = 320
 )
 
-
+library(forcats)
 
 ## plot time ##
 TIME$time2 <- TIME$time
-gg<- ggplot(TIME, aes(x = paste(method,"\n",params) , y = log10(time)))+
+TIME$method <- fct_rev(factor(TIME$method)); TIME$method
+gg<- ggplot(TIME, aes(y = method , x = log10(time)))+
   ggtitle("Method runtimes")+
   geom_point()+
   geom_boxplot(alpha=0)+
@@ -927,15 +928,15 @@ gg<- ggplot(TIME, aes(x = paste(method,"\n",params) , y = log10(time)))+
     text=element_text(face="bold", size=6),
     strip.text = element_text(face="bold", size=6, angle=0),
     axis.text = element_text(face="bold", size=6),
-    axis.text.x = element_text(angle=45, hjust=0.80)
+    #axis.text.x = element_text(angle=45, hjust=0.80)
   )
 gg
 
-filename<-paste(results_dir, date, "_",  "methods_time_flat.png", sep = "")
+filename<-paste(results_dir, date, "_",  "methods_time_vert.png", sep = "")
 
 ggsave(
   filename=filename, plot = gg, device = "png", path = NULL, scale = 1,
-  width = 6, height = 3, units = c("in"), dpi = 320
+  width = 5, height = 1.5, units = c("in"), dpi = 320
 )
 
 ```

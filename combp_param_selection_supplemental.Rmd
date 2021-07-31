@@ -34,7 +34,7 @@ library(gridExtra)
 
 library(DMRcate)
 document("/home/leroy/Desktop/PROJECTS/dmrscaler")
-install("/home/leroy/Desktop/PROJECTS/dmrscaler")
+install("/home/leroy/Desktop/PROJECTS/dmrscaler", quick = T)
 
 results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
 ```
@@ -365,15 +365,15 @@ gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) 
       axis.text = element_text(face="bold", size=4, angle=0),
       legend.position = "none"
     )+
-    facet_grid( . ~ params, labeller=labeller(params = labels))
+    facet_wrap( . ~ params, labeller=labeller(params = labels), ncol=1)
   gg
   
-  filename <- paste("./results/",format(Sys.time(),"%Y-%m-%d"), "combp_params_simul_v_call_width" , ".png",sep="")
+  filename <- paste("./results_2/",format(Sys.time(),"%Y-%m-%d"), "combp_param_test_simul_v_call_width" , ".png",sep="")
   #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
   #grid.arrange(gg, ncol=1)
   #dev.off()
   ggsave( filename=filename, plot = gg, device = "png", path = NULL,
-    scale = 1, width = 8, height = 2, units = c("in"), dpi = 320)
+    scale = 1, width = 2, height = 10, units = c("in"), dpi = 320)
 
 
 
@@ -382,8 +382,27 @@ gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) 
 library(scales)
 ### MAPPING VALUES PLOT
 simul_count <- 600
+
+
+p <-  ggplot(MAPPING_VALUES, aes(x=log10(mapping_value))) +
+  geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
+  facet_wrap(. ~ params, ncol = 1 )
+dat <-  ggplot_build(p)$data[[1]]
+dat$PANEL <- factor(dat$PANEL); levels(dat$PANEL)<-levels(factor(MAPPING_VALUES$params))
+dat$params <- dat$PANEL
+dat$cumsum <- numeric(length=nrow(dat))
+for(p in unique(dat$PANEL) ){
+  dat$cumsum[which(dat$PANEL==p)] <- cumsum(dat$y[which(dat$PANEL==p)]) 
+}
+
+#dat$params <- factor(dat$params)
+#levels(dat$params) <- levels(MAPPING_VALUES$params )
+ggplot(dat, aes(x=x, y=cumsum))+
+  geom_line()+facet_wrap(~ params)
+
 gg <- ggplot(MAPPING_VALUES, aes(x=log10(mapping_value))) +
   #ggtitle("simulated v called dmr length log10")+
+  geom_line(data = dat, aes(x=x,y=cumsum))+
   geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
   scale_y_continuous(labels = percent ) +
   ylab("Percent of Simulated DMRs")+
@@ -399,15 +418,15 @@ gg <- ggplot(MAPPING_VALUES, aes(x=log10(mapping_value))) +
     axis.text = element_text(face="bold", size=4, angle=0),
     legend.position = "none"
   )+
-  facet_grid(. ~ params )#, labeller=labeller(method = labels) )
+  facet_wrap( . ~ params, ncol=1 )#, labeller=labeller(method = labels) )
 gg
 
-filename <- paste("./results/",format(Sys.time(),"%Y-%m-%d"), "combp_params_mapping_values" , ".png",sep="")
+filename <- paste("./results_2/",format(Sys.time(),"%Y-%m-%d"), "combp_params_mapping_values" , ".png",sep="")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 #grid.arrange(gg, ncol=1)
 #dev.off()
 ggsave( filename=filename, plot = gg, device = "png", path = NULL,
-  scale = 1, width = 8, height = 2, units = c("in"), dpi = 320)
+  scale = 1, width = 2, height = 10, units = c("in"), dpi = 320)
 
 
 
@@ -444,7 +463,8 @@ for(m in unique(CALLED_TP_FP$method)){
                        width = temp_MV$simul_width),
       strand = rep("*", nrow(temp_MV))
     )
-  for(i in 1:nrow(temp)){   ### 1:i is going to slow things down... incremental operator?
+  for(i in  floor(seq(from=1,to=nrow(temp), length.out = min(nrow(temp), 100) ) ) ){
+    print(paste("i is:",i))
     ## update Simul_TP_FN
     called_grs <- GRanges(
       seqnames = paste("r",temp$run[1:i], temp$called_chr[1:i],sep = "_"),
@@ -486,6 +506,7 @@ for(m in names(P_R)){
     "P_bp" = 0,
     "R_bp" = max_R_bp
   ))
+  P_R[[m]] <- P_R[[m]][which(rowSums(P_R[[m]]) != 0),]
 }
 
 auc <- list("DMRscaler"=data.frame(),"bumphunter"=data.frame(),"DMRcate"=data.frame())

@@ -36,7 +36,7 @@ library(DMRcate)
 document("/home/leroy/Desktop/PROJECTS/dmrscaler")
 install("/home/leroy/Desktop/PROJECTS/dmrscaler", quick = T)
 
-results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
+results_dir <-paste("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
 ```
 
 
@@ -430,6 +430,35 @@ ggsave( filename=filename, plot = gg, device = "png", path = NULL,
 
 
 
+library(forcats)
+TIME$params <- factor(TIME$params)
+levels(TIME$params)<-levels(factor(MAPPING_VALUES$params))
+## plot time ##
+#TIME$time2 <- TIME$time
+#TIME$method <- fct_rev(factor(TIME$method)); TIME$method
+gg<- ggplot(TIME, aes(y = params , x = log10(-time)))+
+  ggtitle("Param set runtimes")+
+  geom_point()+
+  geom_boxplot(alpha=0)+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=6),
+    strip.text = element_text(face="bold", size=6, angle=0),
+    axis.text = element_text(face="bold", size=6),
+    #axis.text.x = element_text(angle=45, hjust=0.80)
+  )
+gg
+
+filename<-paste(results_dir, date, "_",  "combp_params_testing_methods_time_vert.png", sep = "")
+
+ggsave(
+  filename=filename, plot = gg, device = "png", path = NULL, scale = 1,
+  width = 3 , height = 2, units = c("in"), dpi = 320
+)
+
 ```
 
 
@@ -519,19 +548,15 @@ for(m in names(auc)){
 
 df_temp <- data.frame()
 for(i in 1:length(P_R)){
-  df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(paste(names(P_R)[i]) ))) #, "\nAUC = ",round(auc[[i]]$feature_auc,2), sep = "" ))  )) 
+  df_temp <- rbind(df_temp, cbind(P_R[[i]],"params"=rep(paste(names(P_R)[i]  , "\nAUC = ",round(auc[[i]]$bp_auc,2), sep = "" ))  )) 
 }
 
 gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
-  ggtitle("Precision-Recall feature")+
-  labs(subtitle = paste(
-         "DMRscaler AUC=", round(auc[["DMRscaler"]]$feature_auc,3),
-         ", Bumphunter AUC=", round(auc[["bumphunter"]]$feature_auc,3),
-         ", DMRcate AUC=", round(auc[["DMRcate"]]$feature_auc,3)
-         ))+
+  ggtitle("Precision-Recall bp")+
+
   xlab("Recall")+
   ylab("Precision")+
-  geom_path(aes(linetype=method), size=0.5)+
+  geom_path(aes(linetype=params, color=params), size=0.5)+
   xlim(0,1)+
   ylim(0,1)+
   theme_bw()+
@@ -543,16 +568,13 @@ gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
     strip.text = element_text(face="bold", size=6, angle=0),
     axis.text = element_text(face="bold", size=6, angle=0)
   )
+gg
+filename<-paste(results_dir, date, "_",  "combp_param_test_AUCPR_bp.png", sep = "")
 
-filename<-paste(results_dir, date, "_",  "AUCPR_feature.tiff", sep = "")
-#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
-
-#grid.arrange(gg, ncol=1)
-#dev.off()
 ggsave(
   filename=filename,
   plot = gg,
-  device = "tiff",
+  device = "png",
   path = NULL,
   scale = 1,
   width = 4,

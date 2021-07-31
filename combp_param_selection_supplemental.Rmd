@@ -452,6 +452,7 @@ gg<- ggplot(TIME, aes(y = params , x = log10(-time)))+
   )
 gg
 
+
 filename<-paste(results_dir, date, "_",  "combp_params_testing_methods_time_vert.png", sep = "")
 
 ggsave(

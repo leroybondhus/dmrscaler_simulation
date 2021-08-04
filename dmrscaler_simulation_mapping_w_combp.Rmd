@@ -79,13 +79,13 @@ TIME <- data.frame("method"=character(), "params"=character(),"time"=numeric())
 #DMRCATE_WIDTH_PAIRS <- data.frame("simulated_width"=numeric(), "called_width"=numeric(), "param_string"=character())
 #DMRCATE_MAPPING_VALUES <- data.frame("mapping_value"=numeric(), "param_string"=character())
 
-for(RUN in 1:5){
+for(RUN in 1:3){
         ## delta_beta = artificial inflation of beta values between groups
         ## num_samples = number of samples for each group
         ## noise = proportion of cgs in DMR that are not to have an altered beta value
         ## dmr_buffer = number of non-dmr cgs to enforce between each artificial dmr
         print(paste("RUN IS :",RUN))
-        pars <- data.frame("delta_beta" = 0.2, "num_samples" = 8, "noise" = 0.5, "dmr_buffer" = 10) 
+        pars <- data.frame("delta_beta" = 0.4, "num_samples" = 8, "noise" = 0.5, "dmr_buffer" = 10) 
         
         
         
@@ -185,19 +185,19 @@ for(RUN in 1:5){
                                                            data_to_sample = mwr$p_val,
                                                            FDR_scaler = fdrscaler,
                                                            clt_numCGs = c(2, 5, 10, 25, 50))
-              ## data <-  names, chr, pos,  scoring_value (-log10pval)
-            #  data <- controlCGlocs
-              data <- locs[,1:3]
-              data$chr <- as.factor(data$chr)
-              colnames(data)<-c("names","pos","chr")
-              data$scoring_values <- mwr$p_val
+            #   ## data <-  names, chr, pos,  scoring_value (-log10pval)
+            # #  data <- controlCGlocs
+            #   data <- locs[,1:3]
+            #   data$chr <- as.factor(data$chr)
+            #   colnames(data)<-c("names","pos","chr")
+              locs$scoring_values <- mwr$p_val
             #  data$chr <- droplevels(data$chr)
               layer_sizes <- c(2,4,8,16,32,64)
               layers<-list()
             print(paste("On to dmrscaler RUN IS :",RUN))
               
               t1 <- Sys.time() 
-              dmrscaler_result <- dmrscaler::dmrscaler(locs = data, fdrscaler = fdrscaler, cltable=cltable, layer_sizes = layer_sizes)
+              dmrscaler_result <- dmrscaler::dmrscaler(locs = locs, fdrscaler = fdrscaler, cltable=cltable, layer_sizes = layer_sizes)
               built_layers <- dmrscaler_result
               t2 <- Sys.time()
               TIME <- rbind(TIME, data.frame("method" = "dmrscaler",
@@ -521,13 +521,15 @@ for(RUN in 1:5){
         
         print(paste("On to combp RUN IS :",RUN))        
         ################# COMB-P ###################
+        ## clean up a bit
+        rm(B_mod, bumps4)
         ## Set up bed file
         combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,end=locs$pos+1,pval=10^-mwr$p_val)
         combp_input_bed <- combp_input_bed[order(combp_input_bed$chrom),]
         colnames(combp_input_bed)[1] <- "#chrom"
         data.table::fwrite(combp_input_bed, file = "./intermediate_data_2/combp_temp_input.bed", row.names = F,col.names = T, sep = "\t") 
         ## Pass bed file into comb-p
-
+        rm(combp_input_bed)
         t1 <- Sys.time()
         system("comb-p pipeline -c 4 --dist 1000000 --step 5000 --seed 1e-3 -p ./intermediate_data_2/test --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
         t2 <- Sys.time()
@@ -638,11 +640,11 @@ for(RUN in 1:5){
         
 }
 
-write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"WIDTH_PAIRS.csv",sep = ""))
-write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"MAPPING_VALUES.csv",sep=""))
-write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"CALLED_TP_FP.csv",sep=""))
-write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"TIME.csv",sep=""))
-save.image( paste(format(Sys.time(),"%Y-%m-%d_"),"Post_simul.Rdata",sep = ""))
+write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_WIDTH_PAIRS.csv",sep = ""))
+write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_MAPPING_VALUES.csv",sep=""))
+write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_CALLED_TP_FP.csv",sep=""))
+write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_TIME.csv",sep=""))
+save.image( paste(format(Sys.time(),"%Y-%m-%d_"),"Post_simul_dB0.4.Rdata",sep = ""))
 ```
 
 

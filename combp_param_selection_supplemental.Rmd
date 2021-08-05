@@ -507,7 +507,6 @@ for(m in unique(CALLED_TP_FP$method)){
       if(!is.element(j, cs_overlap@from)){ TP[j] <- 0; FN[i] <- 1;  next;}
       which2<-cs_overlap@to[which(cs_overlap@from==j)]
       Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
-      Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
       # Simul_TP_FN$FNfeature <- 1 - Simul_TP_FN$TPfeature
     }
     ##

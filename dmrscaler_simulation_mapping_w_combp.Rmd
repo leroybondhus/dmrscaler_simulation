@@ -85,7 +85,7 @@ for(RUN in 1:3){
         ## noise = proportion of cgs in DMR that are not to have an altered beta value
         ## dmr_buffer = number of non-dmr cgs to enforce between each artificial dmr
         print(paste("RUN IS :",RUN))
-        pars <- data.frame("delta_beta" = 0.4, "num_samples" = 8, "noise" = 0.5, "dmr_buffer" = 10) 
+        pars <- data.frame("delta_beta" = 0.1, "num_samples" = 8, "noise" = 0.5, "dmr_buffer" = 10) 
         
         
         
@@ -185,19 +185,19 @@ for(RUN in 1:3){
                                                            data_to_sample = mwr$p_val,
                                                            FDR_scaler = fdrscaler,
                                                            clt_numCGs = c(2, 5, 10, 25, 50))
-            #   ## data <-  names, chr, pos,  scoring_value (-log10pval)
-            # #  data <- controlCGlocs
-            #   data <- locs[,1:3]
-            #   data$chr <- as.factor(data$chr)
-            #   colnames(data)<-c("names","pos","chr")
-              locs$scoring_values <- mwr$p_val
+              ## data <-  names, chr, pos,  scoring_value (-log10pval)
+            #  data <- controlCGlocs
+              data <- locs[,1:3]
+              data$chr <- as.factor(data$chr)
+              colnames(data)<-c("names","pos","chr")
+              data$scoring_values <- mwr$p_val
             #  data$chr <- droplevels(data$chr)
               layer_sizes <- c(2,4,8,16,32,64)
               layers<-list()
             print(paste("On to dmrscaler RUN IS :",RUN))
               
               t1 <- Sys.time() 
-              dmrscaler_result <- dmrscaler::dmrscaler(locs = locs, fdrscaler = fdrscaler, cltable=cltable, layer_sizes = layer_sizes)
+              dmrscaler_result <- dmrscaler::dmrscaler(locs = data, fdrscaler = fdrscaler, cltable=cltable, layer_sizes = layer_sizes)
               built_layers <- dmrscaler_result
               t2 <- Sys.time()
               TIME <- rbind(TIME, data.frame("method" = "dmrscaler",
@@ -529,12 +529,12 @@ for(RUN in 1:3){
         colnames(combp_input_bed)[1] <- "#chrom"
         data.table::fwrite(combp_input_bed, file = "./intermediate_data_2/combp_temp_input.bed", row.names = F,col.names = T, sep = "\t") 
         ## Pass bed file into comb-p
-        rm(combp_input_bed)
+
         t1 <- Sys.time()
         system("comb-p pipeline -c 4 --dist 1000000 --step 5000 --seed 1e-3 -p ./intermediate_data_2/test --region-filter-p 0.1 ./intermediate_data_2/combp_temp_input.bed ")
         t2 <- Sys.time()
         TIME <- rbind(TIME, data.frame("method" = "combp",
-                           "params" = "dist=1000_step=100",
+                           "params" = "dist=1000000_step=5000",
                            "time"=as.numeric(difftime(t2,t1, units="secs")) ) )
         
         
@@ -628,10 +628,10 @@ for(RUN in 1:3){
         ###### Add table to report timing statistics for each method ?? 
 
         
-        write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"WIDTH_PAIRS.csv",sep=""))
-        write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"MAPPING_VALUES.csv",sep=""))
-        write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"CALLED_TP_FP.csv",sep=""))
-        write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"TIME.csv",sep=""))
+        write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"_dB0.1WIDTH_PAIRS.csv",sep=""))
+        write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"_dB0.1MAPPING_VALUES.csv",sep=""))
+        write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"_dB0.1CALLED_TP_FP.csv",sep=""))
+        write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d-%H%M%S_"),"_dB0.1TIME.csv",sep=""))
 
         
         ####
@@ -640,10 +640,10 @@ for(RUN in 1:3){
         
 }
 
-write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_WIDTH_PAIRS.csv",sep = ""))
-write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_MAPPING_VALUES.csv",sep=""))
-write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_CALLED_TP_FP.csv",sep=""))
-write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.4_TIME.csv",sep=""))
+write.csv(WIDTH_PAIRS, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.1_WIDTH_PAIRS.csv",sep = ""))
+write.csv(MAPPING_VALUES, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.1_MAPPING_VALUES.csv",sep=""))
+write.csv(CALLED_TP_FP, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.1_CALLED_TP_FP.csv",sep=""))
+write.csv(TIME, file = paste("./results/",format(Sys.time(),"%Y-%m-%d_"),"_dB0.1_TIME.csv",sep=""))
 save.image( paste(format(Sys.time(),"%Y-%m-%d_"),"Post_simul_dB0.4.Rdata",sep = ""))
 ```
 
@@ -700,7 +700,7 @@ gg <- ggplot(WIDTH_PAIRS[which(WIDTH_PAIRS$called_width > 1),], aes(x=log10(simu
   facet_wrap(. ~ method, ncol = 1 , labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_ggsave_",  "sim_v_called_width_vert.png", sep = "")
+filename<-paste(results_dir, date, "_ggsave_",  "_B01_sim_v_called_width_vert.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)
@@ -725,7 +725,7 @@ ggsave(
 
 library(scales)
 ### MAPPING VALUES PLOT
-simul_count <- 1000
+simul_count <- 400
 for(m in unique(MAPPING_VALUES2$method)){
   MAPPING_VALUES2$frac_covered <- cumsum(MAPPING_VALUES2$mapping_value[which(MAPPING_VALUES2$method==m)])/simul_count
 }
@@ -767,7 +767,7 @@ gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
   facet_wrap(. ~ method, ncol = 1 )# , labeller=labeller(method = labels) )
 gg
 
-filename<-paste(results_dir, date, "_",  "mapping_ratios_vert.png", sep = "")
+filename<-paste(results_dir, date, "_",  "B01_mapping_ratios_vert.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)
@@ -792,7 +792,8 @@ ggsave(
 ## one measure feature count
 
 ## raw bp length
-
+which <- which(CALLED_TP_FP$method=="combp")
+CALLED_TP_FP$method[which] <- "comb-p"
 P_R <- list() 
 for(m in unique(CALLED_TP_FP$method)){
   which <- which(CALLED_TP_FP$method == m)
@@ -828,9 +829,8 @@ for(m in unique(CALLED_TP_FP$method)){
     cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) ##### write this....
     cs_overlap <- findOverlaps(simul_grs, cs_intersect )
     for(j in 1:length(simul_grs)){
-      if(!is.element(j, cs_overlap@from)){ TP[j] <- 0; FN[i] <- 1;  next;}
+      if(!is.element(j, cs_overlap@from)){ Simul_TP_FN$TPfeature[j] <- 0;  next;}
       which2<-cs_overlap@to[which(cs_overlap@from==j)]
-      Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
       Simul_TP_FN$TPfeature[j] <- sum(cs_intersect[which2]@ranges@width) / simul_grs[j]@ranges@width
       # Simul_TP_FN$FNfeature <- 1 - Simul_TP_FN$TPfeature
     }
@@ -883,7 +883,7 @@ gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
          "DMRscaler AUC=", round(auc[["DMRscaler"]]$bp_auc,3),
          ", Bumphunter AUC=", round(auc[["bumphunter"]]$bp_auc,3),
          ", DMRcate AUC=", round(auc[["DMRcate"]]$bp_auc,3),
-         ", Comb-p AUC=", round(auc[["combp"]]$bp_auc,3)
+         ", Comb-p AUC=", round(auc[["comb-p"]]$bp_auc,3)
          ))+
   xlab("Recall")+
   ylab("Precision")+
@@ -903,7 +903,7 @@ gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
 
 gg
 
-filename<-paste(results_dir, date, "_",  "AUCPR_bp.png", sep = "")
+filename<-paste(results_dir, date, "_",  "B01_AUCPR_bp.png", sep = "")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 #grid.arrange(gg, ncol=1)

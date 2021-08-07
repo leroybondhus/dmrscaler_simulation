@@ -363,17 +363,19 @@ gg <- ggplot(WIDTH_PAIRS, aes(x=log10(simulated_width), y=log10(called_width))) 
       text=element_text(face="bold", size=4),
       strip.text = element_text(face="bold", size=4, angle=0),
       axis.text = element_text(face="bold", size=4, angle=0),
-      legend.position = "none"
+      legend.position = "none",
+      strip.text.y.right = element_text(angle = 0),
+      panel.spacing = unit(0.1, "lines")
     )+
-    facet_wrap( . ~ params, labeller=labeller(params = labels), ncol=1)
+    facet_wrap( . ~ params, labeller=labeller(params = labels), ncol=1, strip.position = "right")
   gg
   
-  filename <- paste("./results_2/",format(Sys.time(),"%Y-%m-%d"), "combp_param_test_simul_v_call_width" , ".png",sep="")
+  filename <- paste("./results_2/",format(Sys.time(),"%Y-%m-%d"), "tall_combp_param_test_simul_v_call_width" , ".png",sep="")
   #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
   #grid.arrange(gg, ncol=1)
   #dev.off()
   ggsave( filename=filename, plot = gg, device = "png", path = NULL,
-    scale = 1, width = 2, height = 10, units = c("in"), dpi = 320)
+    scale = 1, width = 2, height = 5, units = c("in"), dpi = 320)
 
 
 
@@ -416,17 +418,19 @@ gg <- ggplot(MAPPING_VALUES, aes(x=log10(mapping_value))) +
     text=element_text(face="bold", size=4),
     strip.text = element_text(face="bold", size=4, angle=0),
     axis.text = element_text(face="bold", size=4, angle=0),
-    legend.position = "none"
+    legend.position = "none",
+    strip.text.y.right = element_text(angle = 0),
+    panel.spacing = unit(0.1, "lines")
   )+
-  facet_wrap( . ~ params, ncol=1 )#, labeller=labeller(method = labels) )
+  facet_wrap( . ~ params, labeller=labeller(params = labels), ncol=1, strip.position = "right")
 gg
 
-filename <- paste("./results_2/",format(Sys.time(),"%Y-%m-%d"), "combp_params_mapping_values" , ".png",sep="")
+filename <- paste("./results_2/",format(Sys.time(),"%Y-%m-%d"), "tall_combp_params_mapping_values" , ".png",sep="")
 #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 #grid.arrange(gg, ncol=1)
 #dev.off()
-ggsave( filename=filename, plot = gg, device = "png", path = NULL,
-  scale = 1, width = 2, height = 10, units = c("in"), dpi = 320)
+  ggsave( filename=filename, plot = gg, device = "png", path = NULL,
+    scale = 1, width = 2, height = 5, units = c("in"), dpi = 320)
 
 
 

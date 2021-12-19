@@ -30,30 +30,81 @@ library("IlluminaHumanMethylationEPICmanifest") ###### NOTE hg19 is used Illumin
 library(tidyverse)
 library(ggplot2)
 library(gridExtra)
+# 
+# document("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
+# install("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
+install("../DMRscaler", quick=T)
 
-document("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
-install("/home/lbondhus/Desktop/PROJECTS/dmrscaler")
-
-results_dir <-paste("/home/lbondhus/Desktop/PROJECTS/dmrscaler_simulation/results/")
+results_dir <-paste("./results/")
 ```
+
+## install DMRscaler 
+To install pull the most recent version from github and place in working directory 
+```{r, results='hide', warning=FALSE, , message=FALSE}
+library("devtools")
+library("roxygen2")
+install("../DMRscaler", quick=T)
+
+library(doParallel)
+registerDoParallel()
+```
+
+## Example Dataset Setup
+We will use data from GSE149960 from (REFERENCE) with DNA methylation from fibroblasts from progeria patients and controls measured on the Illumina methylation EPIC array.  
+```{r get-dataset-dependencies, message=FALSE}
+library("GEOquery")
+```
+
 
 # Pre-processing
 
 ###  Reading of idat files done with minfi library ###
 ```{r read_data}
-idats_dir<-"/home/lbondhus/Desktop/STABLE_DATA/GSE74432/idat"
-idats_files<-list.files(path=idats_dir, pattern = "*.idat")
-targets <- read.metharray.sheet("/home/lbondhus/Desktop/STABLE_DATA/GSE74432/data_table/", pattern = "Formatted_Sample_Table", verbose = TRUE)
-targets$Basename<-paste(targets$Sample_Name, "_", targets$Slide, "_", targets$Array, sep = "")
-RGSet <- read.metharray.exp(base = idats_dir, targets = targets)
-rm(idats_dir, idats_files, targets)
+#idats_dir<-"/home/lbondhus/Desktop/STABLE_DATA/GSE74432/idat"
+
+gse <- getGEO("GSE74432", GSEMatrix = TRUE)
+phen <- gse$GSE74432_series_matrix.txt.gz@phenoData@data
+phen <- phen[intersect( grep("[Cc]ontrol", phen$characteristics_ch1.1),grep("whole blood",phen$characteristics_ch1.2) ),]
+rm(gse)
+
+## get methylation data as idat files (NOTE: this saves files locally in working directory, unpacked size is 411 Mb)
+## unpacked size is 2.01 Gb  
+getGEOSuppFiles("GSE74432")
+untar("GSE74432/GSE74432_RAW.tar", exdir = "GSE74432/idat")
+file.remove("GSE74432/GSE74432_RAW.tar")
+
+
+idat_files <- list.files("GSE74432/idat", pattern = "idat.gz$", full = TRUE)
+sapply(idat_files, gunzip, overwrite = TRUE); rm(idat_files)
+
+# 
+# idats_files<-list.files(path=idats_dir, pattern = "*.idat")
+# targets <- read.metharray.sheet("/home/lbondhus/Desktop/STABLE_DATA/GSE74432/data_table/", pattern = "Formatted_Sample_Table", verbose = TRUE)
+# targets$Basename<-paste(targets$Sample_Name, "_", targets$Slide, "_", targets$Array, sep = "")
+# RGSet <- read.metharray.exp(base = idats_dir, targets = targets)
+# RGSet <- read.metharray.exp(base = idats_files)
+# rm(idats_dir, idats_files, targets)
+```
+##  Preprocessing
+Preprocessing of idat files is done with minfi here.
+```{r preprocessing-dependencies, message=FALSE}
+library("minfi")
 ```
 
-###  Processing done with minfi library  ###
-```{r process idats}
+```{r preprocessing}
+###  Reading of idat files done with minfi library ###
+
+stringr::str_split_fixed()
+idats_dir<-"GSE74432/idat"
+
+
+targets <- data.frame("Basename"= stringr::str_split_fixed(basename(phen$supplementary_file), "_Grn", 2)[,1] )
+
+RGSet <- read.metharray.exp(base = idats_dir, targets = targets)
 GRset.funnorm <- preprocessFunnorm(RGSet);rm(RGSet)
 snps <- getSnpInfo(object = GRset.funnorm)
 GRset.funnorm <- dropLociWithSnps(GRset.funnorm, snps=c("SBE", "CpG"), maf=0);rm(snps)
+rm(idats_dir)
 ```
 
 ### To remove largest sex biases, X and Y signals removed ###
@@ -65,18 +116,25 @@ GRset.funnorm<-GRset.funnorm[1:(length(GRset.funnorm)-as.numeric(cut_from_end)),
 rm(cut_from_end)
 ```
 
-```{r}
-
-controls<-which(pdat$Sample_Group==" Control" & pdat$X==" whole blood")
-B<-getBeta(GRset.funnorm)
-cB<-B[,controls]
-cP <-pdat[controls,]
+```{r data_setup}
+controls <- grep("[Cc]ontrol",phen$title)
 locs <- getLocations(GRset.funnorm)
+locs <- data.frame("names"=locs@ranges@NAMES, "pos"=locs@ranges@start, "chr" = rep(locs@seqnames@values, locs@seqnames@lengths))
+B <- getBeta(GRset.funnorm)
+```
 
-M<-getM(GRset.funnorm)
-cB<-B[,controls]
-locs_df <- data.frame("names"=locs@ranges@NAMES, "pos"=locs@ranges@start, "chr" = rep(locs@seqnames@values, locs@seqnames@lengths))
-cdf <- as.data.frame(cP)
+```{r}
+# 
+# controls<-which(pdat$Sample_Group==" Control" & pdat$X==" whole blood")
+# B<-getBeta(GRset.funnorm)
+# cB<-B[,controls]
+# cP <-pdat[controls,]
+# locs <- getLocations(GRset.funnorm)
+# 
+# M<-getM(GRset.funnorm)
+# cB<-B[,controls]
+# locs_df <- data.frame("names"=locs@ranges@NAMES, "pos"=locs@ranges@start, "chr" = rep(locs@seqnames@values, locs@seqnames@lengths))
+# cdf <- as.data.frame(cP)
 ```
 
 
@@ -179,7 +237,7 @@ for(RUN in 1:3){
         
         
         ## {r select two groups to simulate dmr in}
-        g12 <- sample(rownames(pdat), 2*pars$num_samples, replace = FALSE)
+        g12 <- sample(colnames(B), 2*pars$num_samples, replace = FALSE)
         g1 <- g12[1:pars$num_samples]
         g2 <- g12[(pars$num_samples+1):length(g12)]
         
@@ -204,6 +262,14 @@ for(RUN in 1:3){
         ## {r}
               
               ############################     run everything         #########################
+        mwr <- DMRscaler::run_MWW(control_indices = which(colnames(B_mod)==g1) ,
+                                        case_indices = which(colnames(B_mod)==g2),
+                                        Beta = B_mod)
+        locs2 <- locs[,c("chr","pos")]
+        locs2$pval <- mwr$p_val
+        
+        temp <- DMRscaler::dmrscaler(locs = locs2, locs_pval_cutoff = 0.05, region_signif_method = "benj", region_signif_cutoff = 0.01, window_type = "k_near", window_sizes = c(2,4,8,16,32,64), output_type = "comp")
+        
               num_perm <- 10
               clt_reps <- 5e4
               
@@ -269,7 +335,7 @@ for(RUN in 1:3){
         called_dmrs <- built_layers[[length(built_layers)]]
         temp_names <- paste("called", called_dmrs$chr, called_dmrs$start_pos, sep = "_")
         called_grs <- GRanges(
-          seqnames = called_dmrs$chr,
+          seqnames = called_dmrs$,
           ranges = IRanges(start = called_dmrs$start_pos, end = called_dmrs$stop_pos, names = temp_names),
           strand = rep("*", nrow(called_dmrs))
         )

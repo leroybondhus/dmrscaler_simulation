@@ -123,7 +123,7 @@ for(simul_pars_id in 1:nrow(simul_pars)){
     }
   }
   
-  simul_constructor_list_el <- paste(colnames(simul_pars),simul_pars[simul_pars_id,], sep = "_", collapse = "__")
+  simul_constructor_list_el <- paste(colnames(simul_pars),simul_pars[simul_pars_id,], sep = "__", collapse = "___")
   simul_constructor_list[[simul_constructor_list_el]]$dmr_locs <- locs[which(locs$in_dmr == 1),]
   
   ## identify g1 and g2 

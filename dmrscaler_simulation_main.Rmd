@@ -86,17 +86,21 @@ simul_sc_tbl <- data.frame("min_cgs"=c(3,6,9,12), "size"=c(1e3,1e4,1e5,1e6), "co
 
 dmr_buffer <- 10
 simul_pars <- merge(merge(merge(data.frame("num_samples"=c(8)),
-                          data.frame("delta_beta"=c(0.1, 0.2, 0.4))),
-                    data.frame("noise" = c(0, 0.25, 0.5))),
-                    data.frame("rep"=c(1:5))
+                          data.frame("delta_beta"=c(0.1, 0.4))),
+                    data.frame("noise" = c(0,  0.5))),
+                    data.frame("rep"=c(1:2))
               )
 simul_pars <- simul_pars[order(simul_pars$num_samples, simul_pars$delta_beta, simul_pars$noise, simul_pars$rep),]
-rownames(simul_pars) <- NULL
+simul_pars_list <- split(simul_pars, 1:nrow(simul_pars))
+for(i in 1:length(simul_pars_list)){
+  names(simul_pars_list)[i] <-paste(colnames(simul_pars),simul_pars[i,], sep = "__", collapse = "___")
+}
+rm(simul_pars)
 
-simul_constructor_list <- list()
-
-for(simul_pars_id in 1:nrow(simul_pars)){
-  ## identify CGs associated with simulated DMR
+simul_constructor_list <- foreach(simul_pars = simul_pars_list, .final = function(x) setNames(x, names(simul_pars_list)), .errorhandling = "pass") %dopar% {
+  locs$in_dmr <- FALSE
+  locs$dmr_size <- NA
+  locs$dmr_name <- NA
   for(i in 1:nrow(simul_sc_tbl)){
     size <- simul_sc_tbl[i,]$size
     min_cgs <- simul_sc_tbl[i,]$min_cgs
@@ -114,25 +118,22 @@ for(simul_pars_id in 1:nrow(simul_pars)){
            & sum(locs$in_dmr[x_which_left:x_which_right])==0   ## not overlapping a dmr that already exists
             & (locs$pos[max(x_which)]-locs$pos[min(x_which)] >= size/10)  ##  size is between size/10 and size
            ){ ## min number cgs achieved and none in dmr already...
-            x_which <- unique(c(min(x_which), sample(x_which, ceiling((1-simul_pars$noise[simul_pars_id]) * length(x_which) )  ) ,max(x_which))) ## sample left and right most cg and introduce noise 
-            locs$in_dmr[x_which] <- 1
+            x_which <- unique(c(min(x_which), sample(x_which, ceiling((1- simul_pars$noise) * length(x_which) )  ) ,max(x_which))) ## sample left and right most cg and introduce noise 
+            locs$in_dmr[x_which] <- TRUE
             locs$dmr_size[x_which] <- locs$pos[max(x_which)]-locs$pos[min(x_which)]
             locs$dmr_name[x_which] <- paste("dmr", size, count, sep = "_")
             count<-count-1
         }
     }
   }
-  
-  simul_constructor_list_el <- paste(colnames(simul_pars),simul_pars[simul_pars_id,], sep = "__", collapse = "___")
-  simul_constructor_list[[simul_constructor_list_el]]$dmr_locs <- locs[which(locs$in_dmr == 1),]
+  simul_list <- list(pars = simul_pars)
+  simul_list$dmr_locs <- locs[which(locs$in_dmr),]
   
   ## identify g1 and g2 
-  g12 <- sample(colnames(B), 2*simul_pars$num_samples[simul_pars_id], replace = FALSE)
-  g1 <- g12[1:simul_pars$num_samples[simul_pars_id]]
-  g2 <- g12[(simul_pars$num_samples[simul_pars_id]+1):length(g12)]
-  simul_constructor_list[[simul_constructor_list_el]]$g1 <- g1
-  simul_constructor_list[[simul_constructor_list_el]]$g2 <- g2
-
+  g12 <- sample(colnames(B), 2*simul_pars$num_samples, replace = FALSE)
+  simul_list$g1 <- g12[1:simul_pars$num_samples]
+  simul_list$g2 <- g12[(simul_pars$num_samples+1):length(g12)]
+  simul_list
 }
 
 ## NOTE: with simul_constructor_list, simulations are deterministic i.e. the random sampling happens within definition of the simul_constructor_list

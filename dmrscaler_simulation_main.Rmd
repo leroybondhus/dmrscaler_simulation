@@ -36,13 +36,16 @@ phen <- phen[intersect( grep("[Cc]ontrol", phen$characteristics_ch1.1),grep("who
 rm(gse)
 
 ## get methylation data as idat files (NOTE: this saves files locally in working directory, unpacked size is 2.01 Gb  
-getGEOSuppFiles("GSE74432")
-untar("GSE74432/GSE74432_RAW.tar", exdir = "GSE74432/idat")
-file.remove("GSE74432/GSE74432_RAW.tar")
+if(length(list.files("GSE74432/idat", pattern = "idat.gz$"))==0){
+  getGEOSuppFiles("GSE74432")
+  untar("GSE74432/GSE74432_RAW.tar", exdir = "GSE74432/idat")
+  file.remove("GSE74432/GSE74432_RAW.tar")
+  
+  
+  idat_files <- list.files("GSE74432/idat", pattern = "idat.gz$", full = TRUE)
+  sapply(idat_files, gunzip, overwrite = TRUE); rm(idat_files)  
+}
 
-
-idat_files <- list.files("GSE74432/idat", pattern = "idat.gz$", full = TRUE)
-sapply(idat_files, gunzip, overwrite = TRUE); rm(idat_files)
 ```
 ##  Preprocessing
 Preprocessing of idat files is done with minfi here.

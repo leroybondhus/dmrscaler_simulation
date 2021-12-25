@@ -17,7 +17,7 @@ phen <- phen[intersect( grep("[Cc]ontrol", phen$characteristics_ch1.1),grep("who
 rm(gse)
 
 ## get methylation data as idat files (NOTE: this saves files locally in working directory, unpacked size is 2.01 Gb
-if(length(list.files("GSE74432/idat", pattern = "idat.gz$"))==0){
+if(length(list.files("GSE74432/idat", pattern = "idat$"))==0){
   getGEOSuppFiles("GSE74432")
   untar("GSE74432/GSE74432_RAW.tar", exdir = "GSE74432/idat")
   file.remove("GSE74432/GSE74432_RAW.tar")

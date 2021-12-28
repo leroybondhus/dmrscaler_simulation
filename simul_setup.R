@@ -107,8 +107,27 @@ simul_constructor_list <- foreach(simul_pars = simul_pars_list, .final = functio
   simul_list$g2 <- g12[(simul_pars$num_samples+1):length(g12)]
   simul_list
 }
-
 ## NOTE: with simul_constructor_list, simulations are deterministic i.e. the random sampling happens within definition of the simul_constructor_list
+
+method_set_list <- list(
+  dmrscaler_1 = list(method="dmrscaler",
+                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = 0.01, region_signif_method = \"bon\", region_signif_cutoff = 0.01, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " ),
+  dmrscaler_2 = list(method="dmrscaler",
+                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = 0.01, region_signif_method = \"ben\", region_signif_cutoff = 0.01, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " ),
+  bumphunter_1 = list(method="bumphunter",
+                      function_call="bumphunter(B_mod,as.matrix(design),chr = locs$chr, pos=locs$pos, cutoff=0.1, maxGap=1e3, B=250, smoothFunction=loessByCluster )"),
+  bumphunter_2 = list(method="bumphunter",
+                      function_call="bumphunter(B_mod,as.matrix(design),chr = locs$chr, pos=locs$pos, cutoff=0.1, maxGap=1e6, B=250, smoothFunction=loessByCluster )"),
+  dmrcate_1 = list(method="dmrcate",
+                   function_call="dmrcate(myannotation, lambda=1e3, C=2)"),
+  dmrcate_2 = list(method="dmrcate",
+                   function_call="dmrcate(myannotation, lambda=1e6, C=2000)"),
+  combp_1 = list(method="combp",
+                 function_call=""),
+  combp_2 = list(method="combp",
+                 function_call="")
+)
+
 
 ## write Rdata objects to load into each simul_individual_run.R script
 filename <- paste("simul_setup.Rdata")
@@ -119,4 +138,6 @@ filename <- paste("simul_table.csv")
 write.table(simul_table, filename, row.names = F, col.names=F, sep=",")
 
 ## write method_table
-
+method_table <- names(method_set_list)
+filename <- paste("method_table.csv")
+write.table(method_table, filename, row.names = F, col.names=F, sep=",")

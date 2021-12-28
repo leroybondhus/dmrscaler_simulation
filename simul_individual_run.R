@@ -5,6 +5,7 @@ install("../DMRscaler", quick=T)
 library(doParallel)
 registerDoParallel()
 
+
 output_dir <-paste("./results/")
 
 load("simul_setup.Rdata")
@@ -81,7 +82,7 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_combp_input.bed",sep="")
   data.table::fwrite(combp_input_bed, file = filename, row.names = F,col.names = T, sep = "\t")
   filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_combp_output.bed",sep="")
-  method_set$function_call <-
+  method_set$function_call <-  -1
 
 } else {
   stop("method_name not found")
@@ -90,6 +91,8 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
 method_set_result <- eval(parse(text=method_set$function_call))
 
 
+
+## convert all method outputs to standard GRange objects with chr,start,stop,pval
 if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
 
 } else if(grepl("bumphunter", method_name, ignore.case = TRUE)){

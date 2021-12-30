@@ -1,8 +1,9 @@
 library("devtools")
 library("roxygen2")
 install("../DMRscaler", quick=T)
-
-library(doParallel)
+library("bumphunter")
+library("DMRcate")
+library("doParallel")
 registerDoParallel()
 
 
@@ -88,16 +89,37 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   stop("method_name not found")
 }
 
+t1 <- Sys.time()
 method_set_result <- eval(parse(text=method_set$function_call))
-
+t2 <- Sys.time()
+filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_TIME.csv", sep="" )
+TIME <- data.frame("run"=basename(filename), "time"=as.numeric(difftime(t2,t1, units="secs")))
+write.table(TIME, filename, row.names = F)
 
 
 ## convert all method outputs to standard GRange objects with chr,start,stop,pval
 if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
+  out_df <- method_set_result[[1]][0,]
+  for(i in 1:length(method_set_result)){
+    if(nrow(method_set_result[[i]])>0 ){
+      out_df <- rbind(out_df, data.frame(method_set_result[[i]],layer=names(method_set_result)[i] ))
+    }
+  }
 
 } else if(grepl("bumphunter", method_name, ignore.case = TRUE)){
+  out_df <- method_set_result$table
+  colnames(out_df)[which(colnames(out_df)=="end")] <- "stop"
+  colnames(out_df)[which(colnames(out_df)=="p.value")] <- "pval_region"
 
 } else if(grepl("dmrcate", method_name, ignore.case = TRUE)){
+  out_df <- data.frame(coord=method_set_result@coord,
+                       stouffer=method_set_result@Stouffer,
+                       HMFDR=method_set_result@HMFDR,
+                       Fisher=method_set_result@Fisher)
+  out_df$chr <- stringr::str_split_fixed(out_df$coord,":",2)[,1]
+  out_df$start <- stringr::str_split_fixed(stringr::str_split_fixed(out_df$coord,":",2)[,2],"-",2)[,1]
+  out_df$stop <- stringr::str_split_fixed(stringr::str_split_fixed(out_df$coord,":",2)[,2],"-",2)[,2]
+  out_df$pval_region <- out_df$stouffer
 
 } else if(grepl("comb", method_name, ignore.case = TRUE)){
 
@@ -105,5 +127,5 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   stop("method_name not found")
 }
 
-filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_result.csv" )
-write.table()
+filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_result.csv", sep="" )
+write.table(out_df, file = filename, row.names = F)

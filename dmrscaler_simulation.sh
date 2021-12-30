@@ -1,18 +1,24 @@
-#### submit_job.sh START ####
+#### dmrscaler_simulation.sh START ####
 #!/bin/bash
 #$ -cwd
 # error = Merged with joblog
-#$ -o joblog.$JOB_ID
+#$ -o joblog.$JOB_ID.$TASK_ID
 #$ -j y
 ## Edit the line below as needed:
-#$ -l highp,h_rt=1:00:00,h_data=2G
+#$ -l highp,h_rt=2:00:00,h_data=4G
 ## Modify the parallel environment
 ## and the number of cores as needed:
 #$ -pe shared 100
 # Email address to notify
-#$ -M bondh185@ucla.edu
+#$ -M $USER@mail
 # Notify when
 #$ -m bea
+# Job array indexes
+
+NUM_SIMUL_SETS=`wc -l < simul_table.csv`
+NUM_METHOD_SETS=`wc -l < method_table.csv`
+UPPER_LIM=$(expr $NUM_SIMUL_SETS \* $NUM_METHOD_SETS )
+#$ -t 1-${UPPER_LIM}:1
 
 # echo job info on joblog:
 echo "Job $JOB_ID started on:   " `hostname -s`
@@ -33,18 +39,12 @@ module load R/4.1.0
 
 Rscript simul_setup.R
 
-NUM_SIMUL_SETS=`wc -l < simul_table.csv`
-NUM_METHOD_SETS=`wc -l < method_table.csv`
+SIMUL_SET_ID=$(expr $SGE_TASK_ID % $NUM_SIMUL_SETS )
+METHOD_SET_ID=$(expr 1 + $(expr $SGE_TASK_ID / $NUM_SIMUL_SETS ))
 
-for i in {1..$NUM_SIMUL_SETS}
-do
-		for j in {1..$NUM_METHOD_SETS}
-		do
-			Rscript simul_individual_run.R $NUM_SIMUL_SETS $NUM_METHOD_SETS  & ## include ampersand to run in parallel	
-		done
-done
+Rscript simul_individual_run.R $SIMUL_SET_ID $METHOD_SET_ID
 
-Rscript 
+Rscript
 
 
 Rscript test_dopar.R

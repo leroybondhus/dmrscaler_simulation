@@ -17,14 +17,14 @@ if(length(args) < 2){
   stop("must supply arguments for simulation parameters (SIMUL_SET) and method parameters (METHOD_SET)")
 }
 
-SIMUL_SET_INDEX <- args[1]
-METHOD_SET_INDEX <- args[2]
+SIMUL_SET_ID <- args[1]
+METHOD_SET_ID <- args[2]
 
-simul_set <- simul_constructor_list[[SIMUL_SET_INDEX]]
-simul_set_name <- names(simul_constructor_list)[SIMUL_SET_INDEX]
+simul_set <- simul_constructor_list[[SIMUL_SET_ID]]
+simul_set_name <- names(simul_constructor_list)[SIMUL_SET_ID]
 
-method_set <- method_set_list[[METHOD_SET_INDEX]]
-method_set_name <- names(method_set_list)[METHOD_SET_INDEX]
+method_set <- method_set_list[[METHOD_SET_ID]]
+method_set_name <- names(method_set_list)[METHOD_SET_ID]
 
 
 
@@ -80,9 +80,9 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,end=locs$pos+1,pval=10^-mwr$p_val)
   combp_input_bed <- combp_input_bed[order(combp_input_bed$chrom),]
   colnames(combp_input_bed)[1] <- "#chrom"
-  filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_combp_input.bed",sep="")
+  filename <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_combp_input.bed",sep="")
   data.table::fwrite(combp_input_bed, file = filename, row.names = F,col.names = T, sep = "\t")
-  filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_combp_output.bed",sep="")
+  filename <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_combp_output.bed",sep="")
   method_set$function_call <-  -1
 
 } else {
@@ -92,7 +92,7 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
 t1 <- Sys.time()
 method_set_result <- eval(parse(text=method_set$function_call))
 t2 <- Sys.time()
-filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_TIME.csv", sep="" )
+filename <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_TIME.csv", sep="" )
 TIME <- data.frame("run"=basename(filename), "time"=as.numeric(difftime(t2,t1, units="secs")))
 write.table(TIME, filename, row.names = F)
 
@@ -127,5 +127,5 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   stop("method_name not found")
 }
 
-filename <- paste(output_dir,"simul_set_",SIMUL_SET_INDEX,"__method_set_",METHOD_SET_INDEX,"_result.csv", sep="" )
+filename <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_result.csv", sep="" )
 write.table(out_df, file = filename, row.names = F)

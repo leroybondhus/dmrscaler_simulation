@@ -11,8 +11,9 @@ To install pull the most recent version from github and place in working directo
 ```{r, results='hide', warning=FALSE, , message=FALSE}
 library("devtools")
 library("roxygen2")
+document("../DMRscaler")
 install("../DMRscaler", quick=T)
-
+library(DMRscaler)
 library(doParallel)
 registerDoParallel()
 

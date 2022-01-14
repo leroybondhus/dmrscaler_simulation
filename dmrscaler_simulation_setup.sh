@@ -2,7 +2,7 @@
 #!/bin/bash
 #$ -cwd
 # error = Merged with joblog
-#$ -o joblog.$JOB_ID.$TASK_ID
+#$ -o joblog.$JOB_ID
 #$ -j y
 ## Edit the line below as needed:
 #$ -l highp,h_rt=2:00:00,h_data=4G
@@ -12,12 +12,8 @@
 #$ -M $USER@mail
 # Notify when
 #$ -m bea
-# Job array indexes
 
-NUM_SIMUL_SETS=`wc -l < simul_table.csv`
-NUM_METHOD_SETS=`wc -l < method_table.csv`
-UPPER_LIM=$(expr $NUM_SIMUL_SETS \* $NUM_METHOD_SETS )
-#$ -t 1-${UPPER_LIM}:1
+
 
 # echo job info on joblog:
 echo "Job $JOB_ID started on:   " `hostname -s`
@@ -43,16 +39,11 @@ conda activate myconda
 
 
 
-#Rscript simul_setup.R
-
-SIMUL_SET_ID=$(expr $SGE_TASK_ID % $NUM_SIMUL_SETS )
-METHOD_SET_ID=$(expr 1 + $(expr $SGE_TASK_ID / $NUM_SIMUL_SETS ))
-
-Rscript simul_individual_run.R $SIMUL_SET_ID $METHOD_SET_ID
+Rscript simul_setup.R
 
 
 # echo job info on joblog:
 echo "Job $JOB_ID ended on:   " `hostname -s`
 echo "Job $JOB_ID ended on:   " `date `
 echo " "
-#### submit_job.sh STOP ####
+#### dmrscaler_simulation.sh STOP ####

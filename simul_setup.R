@@ -58,9 +58,9 @@ B <- getBeta(GRset.funnorm)
 simul_sc_tbl <- data.frame("min_cgs"=c(3,6,9,12), "size"=c(1e3,1e4,1e5,1e6), "count"=c(50,50,50,50) )
 dmr_buffer <- 10
 simul_pars <- merge(merge(merge(data.frame("num_samples"=c(8)),
-                                data.frame("delta_beta"=c(0.4))),
-                          data.frame("noise" = c(0,  0.5))),
-                    data.frame("rep"=c(1:2))
+                                data.frame("delta_beta"=c(0.1,0.2,0.4))),
+                          data.frame("noise" = c(0,0.25,0.5))),
+                    data.frame("rep"=c(1:3))
 )
 simul_pars <- simul_pars[order(simul_pars$num_samples, simul_pars$delta_beta, simul_pars$noise, simul_pars$rep),]
 simul_pars_list <- split(simul_pars, 1:nrow(simul_pars))
@@ -125,7 +125,7 @@ method_set_list <- list(
   combp_1 = list(method="combp",
                  function_call="system(\"comb-p pipeline -c 4 --dist 1000 --step 100 --seed 1e-3 --region-filter-p 0.1 -p " ),
   combp_2 = list(method="combp",
-                 function_call="system(\"comb-p pipeline -c 4 --dist 10000 --step 5000 --seed 1e-3 --region-filter-p 0.1 -p " )
+                 function_call="system(\"comb-p pipeline -c 4 --dist 1000000 --step 5000 --seed 1e-3 --region-filter-p 0.1 -p " )
 )
 
 

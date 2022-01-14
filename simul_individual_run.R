@@ -19,9 +19,9 @@ if(length(args) < 2){
 
 SIMUL_SET_ID <- as.numeric(args[1])
 METHOD_SET_ID <- as.numeric(args[2])
-filename <- paste(output_dir,"args_test_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,".csv", sep="" )
-TEST <- data.frame("SIMUL_SET_ID"=SIMUL_SET_ID, "METHOD_SET_ID"=METHOD_SET_ID )
-write.table(TEST, filename, row.names = F)
+# filename <- paste(output_dir,"args_test_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,".csv", sep="" )
+# TEST <- data.frame("SIMUL_SET_ID"=SIMUL_SET_ID, "METHOD_SET_ID"=METHOD_SET_ID )
+# write.table(TEST, filename, row.names = F)
 
 
 simul_set <- simul_constructor_list[[SIMUL_SET_ID]]

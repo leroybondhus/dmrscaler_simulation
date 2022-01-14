@@ -8,7 +8,6 @@
 #$ -l highp,h_rt=2:00:00,h_data=4G
 ## Modify the parallel environment
 ## and the number of cores as needed:
-#$ -pe shared 100
 # Email address to notify
 #$ -M $USER@mail
 # Notify when

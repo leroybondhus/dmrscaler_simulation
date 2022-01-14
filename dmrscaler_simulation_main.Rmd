@@ -228,6 +228,7 @@ called_grs <- extractRanges(dmrcoutput = dmrcate_results, genome="hg19")
 combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,end=locs$pos+1,pval=10^-mwr$p_val)
 combp_input_bed <- combp_input_bed[order(combp_input_bed$chrom),]
 colnames(combp_input_bed)[1] <- "#chrom"
+combp_input_bed <- combp_input_bed[order(as.character(combp_input_bed$`#chrom`)),]
 data.table::fwrite(combp_input_bed, file = "./intermediate_data_2/combp_temp_input.bed", row.names = F,col.names = T, sep = "\t") 
 ## Pass bed file into comb-p
 

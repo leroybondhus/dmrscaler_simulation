@@ -81,12 +81,14 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
 } else if(grepl("comb", method_name, ignore.case = TRUE)){
   mwr <- DMRscaler::run_MWW(g1,g2,B_mod)
   locs$pval <- mwr$p_val
-  combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,end=locs$pos+1,pval=10^-mwr$p_val)
+  combp_input_bed <- data.frame(chrom=locs$chr,start=locs$pos,end=locs$pos+1,pval=mwr$p_val)
   combp_input_bed <- combp_input_bed[order(combp_input_bed$chrom),]
-  colnames(combp_input_bed)[1] <- "#chrom"
-  filename <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_combp_input.bed",sep="")
+  colnames(combp_input_bed)[1] <- "chrom"
+  combp_input_bed <- combp_input_bed[order(as.character(combp_input_bed$chrom)),]
+  combp_intermediate_file_prefix <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_combp",sep="")
+  filename <- paste(combp_intermediate_file_prefix,"_input.bed",sep="")
   data.table::fwrite(combp_input_bed, file = filename, row.names = F,col.names = T, sep = "\t")
-  combp_out_filename <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_combp_output.bed",sep="")
+  combp_out_filename <- paste(combp_intermediate_file_prefix,"_output.regions-t.bed",sep="")
   method_set$function_call <-  -1
 
 } else {
@@ -126,7 +128,12 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   out_df$pval_region <- out_df$stouffer
 
 } else if(grepl("comb", method_name, ignore.case = TRUE)){
-  method_set_result <- data.table::fread(combp_out_filename)
+  out_df <- data.table::fread(combp_out_filename)
+  colnames(out_df)[which(colnames(out_df)=="end")] <- "stop"
+  colnames(out_df)[which(colnames(out_df)=="#chrom")] <- "chr"
+  colnames(out_df)[which(colnames(out_df)=="z_p")] <- "pval_region"
+  ## add line removing combp intermediary files
+  eval(parse(text=paste("rm ", paste(combp_intermediate_file_prefix,"*",sep = "") ) ))
 
 } else {
   stop("method_name not found")

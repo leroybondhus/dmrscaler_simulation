@@ -88,7 +88,7 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   combp_temp_file_prefix <- paste(output_dir,"simul_set_",SIMUL_SET_ID,"__method_set_",METHOD_SET_ID,"_combp",sep="")
   filename <- paste(combp_temp_file_prefix,"_input.bed",sep="")
   data.table::fwrite(combp_input_bed, file = filename, row.names = F,col.names = T, sep = "\t")
-  combp_out_filename <- paste(combp_temp_file_prefix,"_output.regions-t.bed",sep="")
+  combp_out_filename <- paste(combp_temp_file_prefix,".regions-t.bed",sep="")
 
   method_set$function_call <-  paste(method_set$function_call,
                                      combp_temp_file_prefix,
@@ -136,7 +136,7 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   colnames(out_df)[which(colnames(out_df)=="#chrom")] <- "chr"
   colnames(out_df)[which(colnames(out_df)=="z_p")] <- "pval_region"
   ## add line removing combp intermediary files
-  eval(parse(text=paste("rm ", paste(combp_temp_file_prefix,"*",sep = "") ) ))
+  system(paste("rm ", paste(combp_temp_file_prefix,"*",sep = "") ))
 
 } else {
   stop("method_name not found")

@@ -5,19 +5,19 @@
 #$ -o joblog.$JOB_ID.$TASK_ID
 #$ -j y
 ## Edit the line below as needed:
-#$ -l highp,h_rt=2:00:00,h_data=6G
+#$ -l h_rt=12:00:00,h_data=8G,exclusive
 ## Modify the parallel environment
 ## and the number of cores as needed:
 # Email address to notify
 #$ -M $USER@mail
 # Notify when
-#$ -m bea
+#$ -m ba
 # Job array indexes
 
 NUM_SIMUL_SETS=`wc -l < simul_table.csv`
 NUM_METHOD_SETS=`wc -l < method_table.csv`
 UPPER_LIM=$(expr $NUM_SIMUL_SETS \* $NUM_METHOD_SETS )
-#$ -t 1-32:1
+#$ -t 1-216:1
 
 # echo job info on joblog:
 echo "Job $JOB_ID started on:   " `hostname -s`
@@ -45,7 +45,7 @@ conda activate myconda
 
 #Rscript simul_setup.R
 
-SIMUL_SET_ID=$(expr 1+ $(expr $SGE_TASK_ID % $NUM_SIMUL_SETS ))
+SIMUL_SET_ID=$(expr 1 + $(expr $SGE_TASK_ID % $NUM_SIMUL_SETS ))
 METHOD_SET_ID=$(expr 1 + $(expr $SGE_TASK_ID / $NUM_SIMUL_SETS ))
 
 Rscript simul_individual_run.R $SIMUL_SET_ID $METHOD_SET_ID

@@ -6,6 +6,8 @@ output: html_document
 ```{r}
 library(IRanges)
 library(GenomicRanges)
+library(data.table)
+library(stringr)
 ```
 
 ```{r}
@@ -30,18 +32,67 @@ for(i in 1:length(simul_constructor_list)){
   }
   
   simul_constructor_list[[i]]$grange <- GRanges(seqnames = temp$chr,
-                                                ranges = IRanges(start=temp$start, end=temp$end, names=temp$names),
+                                                ranges = IRanges(start=temp$start,
+                                                                 end=temp$end,
+                                                                 names=temp$names),
                                                 strand = rep("*",nrow(temp)))
 }
 
 ```
 
-```{r}
-temp <- list.files(path = "./results/simuls/", pattern = "*result.csv")
+```{r add granges for called dmrs}
+filenames <- list.files(path = "./results/simuls/", pattern = "*result.csv", full.names = T)
+
+simul_results <- list()
+
+for(simul_id in 1:length(simul_constructor_list)){
+  for(method_id in 1:length(method_set_list)){
+    filename <- filenames[grep(paste("simul_set_",simul_id,
+                                     "__method_set_",method_id,
+                                     sep=""), filenames)]
+    result <- fread(filename)
+    if(method_set_list[[method_id]]$method=="dmrscaler"){
+      result <- result[grep("64",result$layer),]
+    }
+    simul_results[[basename(filename)]]$grange <- GRanges(
+      seqnames = result$chr,
+      ranges = IRanges(start = result$start,
+                       end = result$stop,
+                       pval_region = result$pval_region),
+      strand = rep("*",nrow(result))
+    ) 
+    
+  }
+}
 
 ```
 
-```{r}
+```{r width_pair setup and plot generation}
+WIDTH_PAIRS <- data.frame("method"=character(),
+                          "delta_beta"=numeric(),
+                          "noise"=numeric(),
+                          "rep"=numeric(),
+                          "simulated_width"=numeric(),
+                          "called_width"=numeric())
+
+for(i in 1:length(simul_results)){
+  simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                   "simul_set_([0-9]*)")[2])
+  simul <- simul_constructor_list[[simul_id]]
+  method_id <- as.numeric(str_match(names(simul_results)[i],
+                                    "method_set_([0-9]*)")[2])
+  called_grs <- simul_results[[i]]$grange
+  simul_grs <- simul$grange
+  overlaps <- findOverlaps(simul_grs, called_grs)
+  temp_df <- data.frame("method" = names(method_set_list)[method_id],
+                        "delta_beta" = simul$pars$delta_beta,
+                        "noise" = simul$pars$noise,
+                        "rep" = simul$pars$rep,
+                        "simulated_width" = simul_grs@ranges@width[overlaps@from],
+                        "called_width" = called_grs@ranges@width[overlaps@to])
+  WIDTH_PAIRS <- rbind(WIDTH_PAIRS, temp_df)
+}
+
 
 ```
 

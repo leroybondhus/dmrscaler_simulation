@@ -1,0 +1,56 @@
+---
+title: "simul_results_analysis"
+output: html_document
+---
+
+```{r}
+library(IRanges)
+library(GenomicRanges)
+```
+
+```{r}
+load("method_set_list.Rdata")
+load("simul_constructor_list.Rdata")
+```
+
+```{r add granges for simulated dmrs}
+for(i in 1:length(simul_constructor_list)){
+  simul <- simul_constructor_list[[i]]
+  dmr_ids <- unique(simul$dmr_locs$dmr_name)
+  temp <- data.frame(chr=character(length = length(dmr_ids)),
+                     start=numeric(length = length(dmr_ids)),
+                     end=numeric(length = length(dmr_ids)),
+                     names=character(length = length(dmr_ids)))
+  for(j in 1:length(dmr_ids)){
+    which <- which(simul$dmr_locs$dmr_name==dmr_ids[j])
+    temp$chr[j] <- as.character(unique(simul$dmr_locs$chr[which]))
+    temp$start[j] <- min(simul$dmr_locs$pos[which])
+    temp$end[j] <- max(simul$dmr_locs$pos[which])
+    temp$names[j] <- dmr_ids[j]
+  }
+  
+  simul_constructor_list[[i]]$grange <- GRanges(seqnames = temp$chr,
+                                                ranges = IRanges(start=temp$start, end=temp$end, names=temp$names),
+                                                strand = rep("*",nrow(temp)))
+}
+
+```
+
+```{r}
+temp <- list.files(path = "./results/simuls/", pattern = "*result.csv")
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+

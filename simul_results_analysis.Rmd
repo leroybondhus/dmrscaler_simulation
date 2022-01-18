@@ -67,7 +67,7 @@ for(simul_id in 1:length(simul_constructor_list)){
 
 ```
 
-```{r width_pair setup and plot generation}
+```{r width_pair setup}
 WIDTH_PAIRS <- data.frame("method"=character(),
                           "delta_beta"=numeric(),
                           "noise"=numeric(),
@@ -93,10 +93,47 @@ for(i in 1:length(simul_results)){
   WIDTH_PAIRS <- rbind(WIDTH_PAIRS, temp_df)
 }
 
-
 ```
 
-```{r}
+```{r mapping_value setup}
+MAPPING_VALUES <- data.frame("method"=character(),
+                          "delta_beta"=numeric(),
+                          "noise"=numeric(),
+                          "rep"=numeric(),
+                          "mapping_value"=numeric())
+
+for(i in 1:length(simul_results)){
+  simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                   "simul_set_([0-9]*)")[2])
+  simul <- simul_constructor_list[[simul_id]]
+  method_id <- as.numeric(str_match(names(simul_results)[i],
+                                    "method_set_([0-9]*)")[2])
+  called_grs <- simul_results[[i]]$grange
+  simul_grs <- simul$grange
+  
+  overlaps <- findOverlaps(simul_grs, called_grs)
+  overlaps_count_simul <- countOverlaps( simul_grs, called_grs)
+  overlaps_count_called <- countOverlaps( called_grs, simul_grs)
+  
+  count_called_per_simul <- numeric(length = length(simul_grs) )
+  
+  for(j in 1:length(simul_grs)){
+    if(!is.element(j, overlaps@from)){ count_called_per_simul[j] <- 0; next;}
+    which <- overlaps@to[which(overlaps@from==j)] 
+    max_overlapping_those_called_over_sim <-max(overlaps_count_called[which])
+    if(overlaps_count_simul[j] >= max_overlapping_those_called_over_sim){
+      count_called_per_simul[j] <- overlaps_count_simul[j]
+    } else { count_called_per_simul[j] <- 1/max_overlapping_those_called_over_sim}
+  }
+  
+  
+  temp_df <- data.frame("method" = names(method_set_list)[method_id],
+                        "delta_beta" = simul$pars$delta_beta,
+                        "noise" = simul$pars$noise,
+                        "rep" = simul$pars$rep,
+                        "mapping_value" = count_called_per_simul )
+  MAPPING_VALUES <- rbind(MAPPING_VALUES, temp_df)
+}
 
 ```
 

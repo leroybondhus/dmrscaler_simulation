@@ -176,7 +176,78 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results), .combine = rbind) %dopar% {
   temp_df
 }
 
+```
+
+
+
+
+
+
+```{r operating_statistics setup}
+### want to measures and record global stats used in benchmark Mallik et al 2018
+### create  table or supp table to report
+### TP, FP, FN, Power, Precision, AuPR, MCC, F1, Time
+
+### plots to make Precision-Recall,
+###               Power-FDR,
+###               Precision-Delta_Beta, Power-Delta_Beta
+###               Precision-Noise, Power-Noise
+temp_colnames <- c("method","delta_beta","noise","rep","TP_bp",
+                   "TP_feature_called_prop", ## 1 - this = FP proportion
+                   "TP_feature_simul_prop",  ## 1 - this = FN proportion
+                   "FP_bp","FN_bp","AUPR","MCC","F1","Time")
+OPERATING_STATS <- data.frame(matrix(NA, nrow=length(simul_results),
+                                     ncol=length(temp_colnames)), )
+colnames(OPERATING_STATS) <- temp_colnames
+
+for(i in 1:length(simul_results)){
+  simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                   "simul_set_([0-9]*)")[2])
+  simul <- simul_constructor_list[[simul_id]]
+  method_id <- as.numeric(str_match(names(simul_results)[i],
+                                    "method_set_([0-9]*)")[2])
+  
+  OPERATING_STATS[i,]$method <-names(method_set_list)[method_id]
+  OPERATING_STATS[i,]$delta_beta <- simul$pars$delta_beta
+  OPERATING_STATS[i,]$noise <- simul$pars$noise
+  OPERATING_STATS[i,]$rep <- simul$pars$rep
+  
+  called_grs <- simul_results[[i]]$grange
+  simul_grs <- simul$grange
+  ### need to set a cutoff to region p-value for TP,FP, FN, etc
+  called_grs <- called_grs[which(called_grs$pval_region < 0.05)]
+  
+  cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs)
+  OPERATING_STATS[i,]$TP_bp <- sum(cs_intersect[which]@ranges@width)
+  
+  
+  OPERATING_STATS[i,]$TP_feature_called_prop <- -1
+  
+  
+  OPERATING_STATS[i,]$TP_feature_simul_prop <- -1
+  
+  
+  OPERATING_STATS[i,]$FP_bp <- (sum(simul_grs@ranges@width) -
+                                  OPERATING_STATS[i,]$TP_bp)
+  
+  OPERATING_STATS[i,]$FN_bp <- -1
+  
+  
+  OPERATING_STATS[i,]$AUPR <- -1
+  
+  
+  OPERATING_STATS[i,]$MCC <- -1
+  
+  
+  OPERATING_STATS[i,]$F1 <- -1
+  
+  
+  OPERATING_STATS[i,]$TIME <- -1
+  
+}
 
 ```
+
+
 
 

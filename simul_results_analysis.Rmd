@@ -10,6 +10,7 @@ library(data.table)
 library(stringr)
 library(foreach)
 library(doParallel)
+registerDoParallel(detectCores())
 ```
 
 ```{r}
@@ -100,12 +101,18 @@ for(i in 1:length(simul_results)){
   called_grs <- simul_results[[i]]$grange
   simul_grs <- simul$grange
   overlaps <- findOverlaps(simul_grs, called_grs)
+  
+  temp_sw <- simul_grs@ranges@width[overlaps@from]
+  if(length(temp_sw)==0){temp_sw <- NA}
+  temp_cw <- called_grs@ranges@width[overlaps@to]
+  if(length(temp_cw)==0){temp_cw <- NA}
   temp_df <- data.frame("method" = names(method_set_list)[method_id],
                         "delta_beta" = simul$pars$delta_beta,
                         "noise" = simul$pars$noise,
                         "rep" = simul$pars$rep,
-                        "simulated_width" = simul_grs@ranges@width[overlaps@from],
-                        "called_width" = called_grs@ranges@width[overlaps@to])
+                        "simulated_width" = temp_sw,
+                        "called_width" = temp_cw
+                        )
   WIDTH_PAIRS <- rbind(WIDTH_PAIRS, temp_df)
 }
 
@@ -154,7 +161,7 @@ for(i in 1:length(simul_results)){
 ```
 
 ```{r auc_pr setup}
-registerDoParallel(detectCores())
+
 CALLED_TP_FP <- data.frame("method"=character(),
                           "delta_beta"=numeric(),
                           "noise"=numeric(),
@@ -162,7 +169,9 @@ CALLED_TP_FP <- data.frame("method"=character(),
                           "TP"=numeric(),
                           "pval"=numeric())
 
-CALLED_TP_FP <- foreach(i = 1:length(simul_results), .combine = rbind) %dopar% {
+CALLED_TP_FP <- foreach(i = 1:length(simul_results),
+                        .combine = rbind,
+                        .errorhandling = "pass" ) %dopar% {
   simul_id <- as.numeric(stringr::str_match(names(simul_results)[i],
                                    "simul_set_([0-9]*)")[2])
   simul <- simul_constructor_list[[simul_id]]
@@ -180,13 +189,15 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results), .combine = rbind) %dopar% {
     TP[j] <- sum(cs_intersect[which]@ranges@width) / called_grs[j]@ranges@width
   }  
   
-  
+  temp_pval <- called_grs@elementMetadata$pval_region
+  if(length(temp_pval)==0){temp_pval <- NA}
   temp_df <- data.frame("method" = names(method_set_list)[method_id],
                         "delta_beta" = simul$pars$delta_beta,
                         "noise" = simul$pars$noise,
                         "rep" = simul$pars$rep,
                         "TP" = TP,
-                        "pval" = called_grs@elementMetadata$pval_region)
+                        "pval" = temp_pval
+                        )
   temp_df
 }
 
@@ -206,23 +217,30 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results), .combine = rbind) %dopar% {
 ###               Power-FDR,
 ###               Precision-Delta_Beta, Power-Delta_Beta
 ###               Precision-Noise, Power-Noise
-temp_colnames <- c("method","delta_beta","noise","rep",
+###NOTE this foreach takes ~30-60 min on 12 cores-  save output and load instead of rerunning
+temp_comb <- function(x, ...){
+  mapply(rbind,x,...,SIMPLIFY = FALSE)
+}
+OPERATING_STATS <- foreach(i = 1:length(simul_results),
+                           .combine = 'temp_comb',
+                           .errorhandling = "pass" ) %dopar% {
+  temp_colnames <- c("method","delta_beta","noise","rep",
                    "P", "N", ## positive count, negative count
                    "TP_called", "TP_simul", "TN"  ## 1 minus self: FP,FN,FP 
                    )
-OPERATING_STATS <- list()
-OPERATING_STATS[["feature"]] <- data.frame(matrix(NA, nrow=length(simul_results),
+  OP_STATS <- list()
+  OP_STATS[["feature"]] <- data.frame(matrix(NA, nrow=1,
                                      ncol=length(temp_colnames)) )
-OPERATING_STATS[["basepair"]] <- data.frame(matrix(NA, nrow=length(simul_results),
+  OP_STATS[["basepair"]] <- data.frame(matrix(NA, nrow=1,
                                      ncol=length(temp_colnames)) )
-OPERATING_STATS[["cpg_probe"]] <- data.frame(matrix(NA, nrow=length(simul_results),
+  OP_STATS[["cpg_probe"]] <- data.frame(matrix(NA, nrow=1,
                                      ncol=length(temp_colnames)) )
 
-colnames(OPERATING_STATS[["feature"]]) <- temp_colnames
-colnames(OPERATING_STATS[["basepair"]]) <- temp_colnames
-colnames(OPERATING_STATS[["cpg_probe"]]) <- temp_colnames
-
-for(i in 1:length(simul_results)){
+  colnames(OP_STATS[["feature"]]) <- temp_colnames
+  colnames(OP_STATS[["basepair"]]) <- temp_colnames
+  colnames(OP_STATS[["cpg_probe"]]) <- temp_colnames
+  
+  
   
   simul_id <- as.numeric(str_match(names(simul_results)[i],
                                    "simul_set_([0-9]*)")[2])
@@ -235,12 +253,12 @@ for(i in 1:length(simul_results)){
   ### need to set a cutoff to region p-value for TP,FP, FN, etc
   called_grs <- called_grs[which(called_grs$pval_region < 0.05)]
   
-  for(j in 1:length(OPERATING_STATS)){
-    op_stat_type <- names(OPERATING_STATS)
-    OPERATING_STATS[[j]][i,]$method <-names(method_set_list)[method_id]
-    OPERATING_STATS[[j]][i,]$delta_beta <- simul$pars$delta_beta
-    OPERATING_STATS[[j]][i,]$noise <- simul$pars$noise
-    OPERATING_STATS[[j]][i,]$rep <- simul$pars$rep
+  for(j in 1:length(OP_STATS)){
+    op_stat_type <- names(OP_STATS)
+    OP_STATS[[j]]$method <-names(method_set_list)[method_id]
+    OP_STATS[[j]]$delta_beta <- simul$pars$delta_beta
+    OP_STATS[[j]]$noise <- simul$pars$noise
+    OP_STATS[[j]]$rep <- simul$pars$rep
   }
   
   ## start : add TP rate to grs features ###
@@ -272,28 +290,31 @@ for(i in 1:length(simul_results)){
   ## end : add TP rate to grs features ###
   
   ## start: feature operating characteristics
-  OPERATING_STATS$feature[i,]$P <- length(simul_grs) 
-  OPERATING_STATS$feature[i,]$N <- length(simul_inverse_grs)
-  OPERATING_STATS$feature[i,]$TP_called <- mean(called_grs$TP)
-  OPERATING_STATS$feature[i,]$TP_simul <- mean(simul_grs$TP)
-  OPERATING_STATS$feature[i,]$TN <- mean(simul_inverse_grs$TP)
+  OP_STATS$feature$P <- length(simul_grs) 
+  OP_STATS$feature$N <- length(simul_inverse_grs)
+  OP_STATS$feature$TP_called <- mean(called_grs$TP)
+  OP_STATS$feature$TP_simul <- mean(simul_grs$TP)
+  OP_STATS$feature$TN <- mean(simul_inverse_grs$TP)
   ## end: feature operating characteristics
   ## start: basepair operating characteristics
-  OPERATING_STATS$basepair[i,]$P <- sum(simul_grs@ranges@width) 
-  OPERATING_STATS$basepair[i,]$N <- sum(simul_inverse_grs@ranges@width)
-  OPERATING_STATS$basepair[i,]$TP_called <- sum(called_grs$TP * called_grs@ranges@width)
-  OPERATING_STATS$basepair[i,]$TP_simul <- sum(simul_grs$TP * simul_grs@ranges@width)
-  OPERATING_STATS$basepair[i,]$TN <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
+  OP_STATS$basepair$P <- sum(simul_grs@ranges@width) 
+  OP_STATS$basepair$N <- sum(simul_inverse_grs@ranges@width)
+  OP_STATS$basepair$TP_called <- sum(called_grs$TP * called_grs@ranges@width)
+  OP_STATS$basepair$TP_simul <- sum(simul_grs$TP * simul_grs@ranges@width)
+  OP_STATS$basepair$TN <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
   ## end: basepair operating characteristics
   ## start: cpg_probe operating characteristics
-  OPERATING_STATS$cpg_probe[i,]$P <- sum( GenomicRanges::countOverlaps(simul_grs, locs_gr) ) 
-  OPERATING_STATS$cpg_probe[i,]$N <- sum( GenomicRanges::countOverlaps(simul_inverse_grs, locs_gr) )
-  OPERATING_STATS$cpg_probe[i,]$TP_called <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
-  OPERATING_STATS$cpg_probe[i,]$TP_simul <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
+  OP_STATS$cpg_probe$P <- sum( GenomicRanges::countOverlaps(simul_grs, locs_gr) ) 
+  OP_STATS$cpg_probe$N <- sum( GenomicRanges::countOverlaps(simul_inverse_grs, locs_gr) )
+  OP_STATS$cpg_probe$TP_called <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
+  OP_STATS$cpg_probe$TP_simul <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
   temp <- length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from)  
-  OPERATING_STATS$cpg_probe[i,]$TN <- (OPERATING_STATS$cpg_probe[i,]$N - 
-                                         length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from)) 
-                                         
+  OP_STATS$cpg_probe$TN <- (OP_STATS$cpg_probe$N - 
+                                         length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from))
+  write.csv(paste(simul_id, method_id, sep = ","),
+            file=paste("temp_simul_method",simul_id, method_id,".csv",sep = "_") )
+  
+  OP_STATS
   ## end: cpg_probe operating characteristics
 
 }

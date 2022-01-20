@@ -221,7 +221,7 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results),
 temp_comb <- function(x, ...){
   mapply(rbind,x,...,SIMPLIFY = FALSE)
 }
-OPERATING_STATS <- foreach(i = 1:length(simul_results),
+OPERATING_STATS <- foreach(i = length(simul_results),
                            .combine = 'temp_comb',
                            .errorhandling = "pass" ) %dopar% {
   temp_colnames <- c("method","delta_beta","noise","rep",
@@ -269,48 +269,64 @@ OPERATING_STATS <- foreach(i = 1:length(simul_results),
   cs_inverse_intersect <-  GenomicRanges::intersect( called_grs, simul_inverse_grs)
   cs_inverse_overlap <-  GenomicRanges::findOverlaps( called_grs, simul_inverse_grs)
   
-  simul_grs$TP <- -1
-  for(j in 1:length(simul_grs)){
-    if(!is.element(j, cs_overlap@to)){ simul_grs[j]$TP <- 0; next;}
-    which <- which(cs_overlap@to==j)
-    simul_grs[j]$TP <- sum(cs_intersect[which]@ranges@width) / simul_grs[j]@ranges@width 
+  if(length(called_grs)==0){
+    for(j in 1:length(OP_STATS)){
+      OP_STATS[[j]]$TP_called <- 0
+      OP_STATS[[j]]$TP_simul <- 0
+    }
+    OP_STATS$feature$P <- length(simul_grs)
+    OP_STATS$feature$N <- length(simul_inverse_grs)
+    OP_STATS$feature$TN <- 1
+    OP_STATS$basepair$P <- sum(simul_grs@ranges@width)
+    OP_STATS$basepair$N <- sum(simul_inverse_grs@ranges@width)
+    OP_STATS$basepair$TN <- sum(simul_inverse_grs@ranges@width)
+    OP_STATS$cpg_probe$P <- sum( GenomicRanges::countOverlaps(simul_grs, locs_gr) )
+    OP_STATS$cpg_probe$N <- sum( GenomicRanges::countOverlaps(simul_inverse_grs, locs_gr) )
+    OP_STATS$cpg_probe$TN <- sum( GenomicRanges::countOverlaps(simul_inverse_grs, locs_gr) )
+  }else{
+    simul_grs$TP <- -1
+    for(j in 1:length(simul_grs)){
+      if(!is.element(j, cs_overlap@to)){ simul_grs[j]$TP <- 0; next;}
+      temp_gr <- GenomicRanges::intersect(cs_intersect, simul_grs[j])
+      simul_grs[j]$TP <- sum(temp_gr@ranges@width) / simul_grs[j]@ranges@width 
+    }
+    simul_inverse_grs$TP <- -1
+    for(j in 1:length(simul_inverse_grs)){
+      if(!is.element(j, cs_inverse_overlap@to)){ simul_inverse_grs[j]$TP <- 1; next;}
+      temp_gr <- GenomicRanges::intersect(cs_inverse_intersect, simul_inverse_grs[j])
+      simul_inverse_grs[j]$TP <- 1-(sum(temp_gr@ranges@width) / simul_inverse_grs[j]@ranges@width)
+    }
+    called_grs$TP <- -1
+    for(j in 1:length(called_grs)){
+      if(!is.element(j, cs_overlap@from)){ called_grs[j]$TP <- 0; next;}
+      temp_gr <- GenomicRanges::intersect(cs_intersect, called_grs[j])
+      called_grs[j]$TP <- sum(temp_gr@ranges@width) / called_grs[j]@ranges@width 
+    }
+    ## end : add TP rate to grs features ###
+    
+    ## start: feature operating characteristics
+    OP_STATS$feature$P <- length(simul_grs) 
+    OP_STATS$feature$N <- length(simul_inverse_grs)
+    OP_STATS$feature$TP_called <- mean(called_grs$TP)
+    OP_STATS$feature$TP_simul <- mean(simul_grs$TP)
+    OP_STATS$feature$TN <- mean(simul_inverse_grs$TP)
+    ## end: feature operating characteristics
+    ## start: basepair operating characteristics
+    OP_STATS$basepair$P <- sum(simul_grs@ranges@width) 
+    OP_STATS$basepair$N <- sum(simul_inverse_grs@ranges@width)
+    OP_STATS$basepair$TP_called <- sum(called_grs$TP * called_grs@ranges@width)
+    OP_STATS$basepair$TP_simul <- sum(simul_grs$TP * simul_grs@ranges@width)
+    OP_STATS$basepair$TN <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
+    ## end: basepair operating characteristics
+    ## start: cpg_probe operating characteristics
+    OP_STATS$cpg_probe$P <- sum( GenomicRanges::countOverlaps(simul_grs, locs_gr) ) 
+    OP_STATS$cpg_probe$N <- sum( GenomicRanges::countOverlaps(simul_inverse_grs, locs_gr) )
+    OP_STATS$cpg_probe$TP_called <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
+    OP_STATS$cpg_probe$TP_simul <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
+    temp <- length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from)  
+    OP_STATS$cpg_probe$TN <- (OP_STATS$cpg_probe$N - 
+                                           length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from))
   }
-  simul_inverse_grs$TP <- -1
-  for(j in 1:length(simul_inverse_grs)){
-    if(!is.element(j, cs_inverse_overlap@to)){ simul_inverse_grs[j]$TP <- 1; next;}
-    which <- which(cs_inverse_overlap@to==j)
-    simul_inverse_grs[j]$TP <- 1-(sum(cs_inverse_intersect[which]@ranges@width) / simul_inverse_grs[j]@ranges@width) 
-  }
-  called_grs$TP <- -1
-  for(j in 1:length(called_grs)){
-    if(!is.element(j, cs_overlap@from)){ called_grs[j]$TP <- 0; next;}
-    which <- which(cs_overlap@from==j)
-    called_grs[j]$TP <- sum(cs_intersect[which]@ranges@width) / called_grs[j]@ranges@width 
-  }
-  ## end : add TP rate to grs features ###
-  
-  ## start: feature operating characteristics
-  OP_STATS$feature$P <- length(simul_grs) 
-  OP_STATS$feature$N <- length(simul_inverse_grs)
-  OP_STATS$feature$TP_called <- mean(called_grs$TP)
-  OP_STATS$feature$TP_simul <- mean(simul_grs$TP)
-  OP_STATS$feature$TN <- mean(simul_inverse_grs$TP)
-  ## end: feature operating characteristics
-  ## start: basepair operating characteristics
-  OP_STATS$basepair$P <- sum(simul_grs@ranges@width) 
-  OP_STATS$basepair$N <- sum(simul_inverse_grs@ranges@width)
-  OP_STATS$basepair$TP_called <- sum(called_grs$TP * called_grs@ranges@width)
-  OP_STATS$basepair$TP_simul <- sum(simul_grs$TP * simul_grs@ranges@width)
-  OP_STATS$basepair$TN <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
-  ## end: basepair operating characteristics
-  ## start: cpg_probe operating characteristics
-  OP_STATS$cpg_probe$P <- sum( GenomicRanges::countOverlaps(simul_grs, locs_gr) ) 
-  OP_STATS$cpg_probe$N <- sum( GenomicRanges::countOverlaps(simul_inverse_grs, locs_gr) )
-  OP_STATS$cpg_probe$TP_called <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
-  OP_STATS$cpg_probe$TP_simul <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
-  temp <- length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from)  
-  OP_STATS$cpg_probe$TN <- (OP_STATS$cpg_probe$N - 
-                                         length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from))
   write.csv(paste(simul_id, method_id, sep = ","),
             file=paste("temp_simul_method",simul_id, method_id,".csv",sep = "_") )
   

@@ -276,19 +276,19 @@ for(i in 1:length(simul_results)){
   OPERATING_STATS$feature[i,]$TN <- mean(simul_inverse_grs$TP)
   ## end: feature operating characteristics
   ## start: basepair operating characteristics
-  OPERATING_STATS$basepair$P <- -1 
-  OPERATING_STATS$basepair$N <- -1
-  OPERATING_STATS$basepair$TP_called <- -1
-  OPERATING_STATS$basepair$TP_simul <- -1
-  OPERATING_STATS$basepair$TN <- -1
+  OPERATING_STATS$basepair[i,]$P <- sum(simul_grs@ranges@width) 
+  OPERATING_STATS$basepair[i,]$N <- sum(simul_inverse_grs@ranges@width)
+  OPERATING_STATS$basepair[i,]$TP_called <- sum(called_grs$TP * called_grs@ranges@width)
+  OPERATING_STATS$basepair[i,]$TP_simul <- sum(simul_grs$TP * simul_grs@ranges@width)
+  OPERATING_STATS$basepair[i,]$TN <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
   ## end: basepair operating characteristics
-  ## start: feature operating characteristics
-  OPERATING_STATS$feature$P <- -1 
-  OPERATING_STATS$feature$N <- -1
-  OPERATING_STATS$feature$TP_called <- -1
-  OPERATING_STATS$feature$TP_simul <- -1
-  OPERATING_STATS$feature$TN <- -1
-  ## end: feature operating characteristics
+  ## start: cpg_probe operating characteristics
+  OPERATING_STATS$cpg_probe[i,]$P <- -1 
+  OPERATING_STATS$cpg_probe[i,]$N <- -1
+  OPERATING_STATS$cpg_probe[i,]$TP_called <- -1
+  OPERATING_STATS$cpg_probe[i,]$TP_simul <- -1
+  OPERATING_STATS$cpg_probe[i,]$TN <- -1
+  ## end: cpg_probe operating characteristics
   
   
   

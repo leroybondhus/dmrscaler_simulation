@@ -72,8 +72,10 @@ for(simul_id in 1:length(simul_constructor_list)){
                        pval_region = result$pval_region),
       strand = rep("*",nrow(result)),
       seqinfo = chr_seqinfo
-    ) 
-    
+    )
+    ### need to set a cutoff to region p-value for TP,FP, FN, etc
+    which <- which(simul_results[[basename(filename)]]$grange$pval_region < 0.05)
+    simul_results[[basename(filename)]]$grange <- simul_results[[basename(filename)]]$grange[which]
   }
 }
 
@@ -204,7 +206,7 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results), .combine = rbind) %dopar% {
 ###               Precision-Noise, Power-Noise
 temp_colnames <- c("method","delta_beta","noise","rep",
                    "P", "N", ## positive count, negative count
-                   "TP_called", "TP_simul", "FP", "FN"  ## 1-self: FP,FN, 
+                   "TP_called", "TP_simul", "TN"  ## 1 minus self: FP,FN,FP 
                    )
 OPERATING_STATS <- list()
 OPERATING_STATS[["feature"]] <- data.frame(matrix(NA, nrow=length(simul_results),
@@ -238,31 +240,54 @@ for(i in 1:length(simul_results)){
     OPERATING_STATS[[j]][i,]$rep <- simul$pars$rep
   }
   
+  ## start : add TP rate to grs features ###
   cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs)
+  cs_overlap <-  GenomicRanges::findOverlaps( called_grs, simul_grs)
+  simul_inverse_grs <- gaps(simul_grs)
+  simul_inverse_grs <- simul_inverse_grs[which(as.character(strand(simul_inverse_grs))=="*" )]
+  cs_inverse_intersect <-  GenomicRanges::intersect( called_grs, simul_inverse_grs)
+  cs_inverse_overlap <-  GenomicRanges::findOverlaps( called_grs, simul_inverse_grs)
+  
+  simul_grs$TP <- -1
+  for(j in 1:length(simul_grs)){
+    if(!is.element(j, cs_overlap@to)){ simul_grs[j]$TP <- 0; next;}
+    which <- which(cs_overlap@to==j)
+    simul_grs[j]$TP <- sum(cs_intersect[which]@ranges@width) / simul_grs[j]@ranges@width 
+  }
+  simul_inverse_grs$TP <- -1
+  for(j in 1:length(simul_inverse_grs)){
+    if(!is.element(j, cs_inverse_overlap@to)){ simul_inverse_grs[j]$TP <- 1; next;}
+    which <- which(cs_inverse_overlap@to==j)
+    simul_inverse_grs[j]$TP <- 1-(sum(cs_inverse_intersect[which]@ranges@width) / simul_inverse_grs[j]@ranges@width) 
+  }
+  called_grs$TP <- -1
+  for(j in 1:length(called_grs)){
+    if(!is.element(j, cs_overlap@from)){ called_grs[j]$TP <- 0; next;}
+    which <- which(cs_overlap@from==j)
+    called_grs[j]$TP <- sum(cs_intersect[which]@ranges@width) / called_grs[j]@ranges@width 
+  }
+  ## end : add TP rate to grs features ###
   
   ## start: feature operating characteristics
-  OPERATING_STATS$feature$P <- length(simul_grs) 
-  OPERATING_STATS$feature$N <- -1
-  OPERATING_STATS$feature$TP_called <- -1
-  OPERATING_STATS$feature$TP_simul <- -1
-  OPERATING_STATS$feature$FP <- -1
-  OPERATING_STATS$feature$FN <- -1
+  OPERATING_STATS$feature[i,]$P <- length(simul_grs) 
+  OPERATING_STATS$feature[i,]$N <- length(simul_inverse_grs)
+  OPERATING_STATS$feature[i,]$TP_called <- mean(called_grs$TP)
+  OPERATING_STATS$feature[i,]$TP_simul <- mean(simul_grs$TP)
+  OPERATING_STATS$feature[i,]$TN <- mean(simul_inverse_grs$TP)
   ## end: feature operating characteristics
   ## start: basepair operating characteristics
   OPERATING_STATS$basepair$P <- -1 
   OPERATING_STATS$basepair$N <- -1
   OPERATING_STATS$basepair$TP_called <- -1
   OPERATING_STATS$basepair$TP_simul <- -1
-  OPERATING_STATS$basepair$FP <- -1
-  OPERATING_STATS$basepair$FN <- -1
+  OPERATING_STATS$basepair$TN <- -1
   ## end: basepair operating characteristics
   ## start: feature operating characteristics
-  OPERATING_STATS$basepair$P <- -1 
-  OPERATING_STATS$basepair$N <- -1
-  OPERATING_STATS$basepair$TP_called <- -1
-  OPERATING_STATS$basepair$TP_simul <- -1
-  OPERATING_STATS$basepair$FP <- -1
-  OPERATING_STATS$basepair$FN <- -1
+  OPERATING_STATS$feature$P <- -1 
+  OPERATING_STATS$feature$N <- -1
+  OPERATING_STATS$feature$TP_called <- -1
+  OPERATING_STATS$feature$TP_simul <- -1
+  OPERATING_STATS$feature$TN <- -1
   ## end: feature operating characteristics
   
   

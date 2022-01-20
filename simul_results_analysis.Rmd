@@ -13,11 +13,19 @@ library(doParallel)
 ```
 
 ```{r}
+load("locs.Rdata")
 load("method_set_list.Rdata")
 load("simul_constructor_list.Rdata")
 ```
 
 ```{r add granges for simulated dmrs}
+chr_seqlengths <- numeric(length=length(unique(locs$chr)))
+names(chr_seqlengths) <- unique(locs$chr)
+for(chr in unique(locs$chr)){
+  chr_seqlengths[chr] <- max(locs$pos[which(locs$chr==chr)])+1
+}
+chr_seqinfo <- Seqinfo(names(chr_seqlengths), seqlengths = chr_seqlengths)
+
 for(i in 1:length(simul_constructor_list)){
   simul <- simul_constructor_list[[i]]
   dmr_ids <- unique(simul$dmr_locs$dmr_name)
@@ -37,7 +45,8 @@ for(i in 1:length(simul_constructor_list)){
                                                 ranges = IRanges(start=temp$start,
                                                                  end=temp$end,
                                                                  names=temp$names),
-                                                strand = rep("*",nrow(temp)))
+                                                strand = rep("*",nrow(temp)),
+                                                seqinfo = chr_seqinfo)
 }
 
 ```
@@ -61,7 +70,8 @@ for(simul_id in 1:length(simul_constructor_list)){
       ranges = IRanges(start = result$start,
                        end = result$stop,
                        pval_region = result$pval_region),
-      strand = rep("*",nrow(result))
+      strand = rep("*",nrow(result)),
+      seqinfo = chr_seqinfo
     ) 
     
   }
@@ -149,10 +159,10 @@ CALLED_TP_FP <- data.frame("method"=character(),
                           "pval"=numeric())
 
 CALLED_TP_FP <- foreach(i = 1:length(simul_results), .combine = rbind) %dopar% {
-  simul_id <- as.numeric(str_match(names(simul_results)[i],
+  simul_id <- as.numeric(stringr::str_match(names(simul_results)[i],
                                    "simul_set_([0-9]*)")[2])
   simul <- simul_constructor_list[[simul_id]]
-  method_id <- as.numeric(str_match(names(simul_results)[i],
+  method_id <- as.numeric(stringr::str_match(names(simul_results)[i],
                                     "method_set_([0-9]*)")[2])
   called_grs <- simul_results[[i]]$grange
   simul_grs <- simul$grange
@@ -192,13 +202,21 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results), .combine = rbind) %dopar% {
 ###               Power-FDR,
 ###               Precision-Delta_Beta, Power-Delta_Beta
 ###               Precision-Noise, Power-Noise
-temp_colnames <- c("method","delta_beta","noise","rep","TP_bp",
-                   "TP_feature_called_prop", ## 1 - this = FP proportion
-                   "TP_feature_simul_prop",  ## 1 - this = FN proportion
-                   "FP_bp","FN_bp","AUPR","MCC","F1","Time")
-OPERATING_STATS <- data.frame(matrix(NA, nrow=length(simul_results),
-                                     ncol=length(temp_colnames)), )
-colnames(OPERATING_STATS) <- temp_colnames
+temp_colnames <- c("method","delta_beta","noise","rep",
+                   "P", "N", ## positive count, negative count
+                   "TP_called", "TP_simul", "FP", "FN"  ## 1-self: FP,FN, 
+                   )
+OPERATING_STATS <- list()
+OPERATING_STATS[["feature"]] <- data.frame(matrix(NA, nrow=length(simul_results),
+                                     ncol=length(temp_colnames)) )
+OPERATING_STATS[["basepair"]] <- data.frame(matrix(NA, nrow=length(simul_results),
+                                     ncol=length(temp_colnames)) )
+OPERATING_STATS[["cpg_probe"]] <- data.frame(matrix(NA, nrow=length(simul_results),
+                                     ncol=length(temp_colnames)) )
+
+colnames(OPERATING_STATS[["feature"]]) <- temp_colnames
+colnames(OPERATING_STATS[["basepair"]]) <- temp_colnames
+colnames(OPERATING_STATS[["cpg_probe"]]) <- temp_colnames
 
 for(i in 1:length(simul_results)){
   simul_id <- as.numeric(str_match(names(simul_results)[i],
@@ -207,42 +225,50 @@ for(i in 1:length(simul_results)){
   method_id <- as.numeric(str_match(names(simul_results)[i],
                                     "method_set_([0-9]*)")[2])
   
-  OPERATING_STATS[i,]$method <-names(method_set_list)[method_id]
-  OPERATING_STATS[i,]$delta_beta <- simul$pars$delta_beta
-  OPERATING_STATS[i,]$noise <- simul$pars$noise
-  OPERATING_STATS[i,]$rep <- simul$pars$rep
-  
   called_grs <- simul_results[[i]]$grange
   simul_grs <- simul$grange
   ### need to set a cutoff to region p-value for TP,FP, FN, etc
   called_grs <- called_grs[which(called_grs$pval_region < 0.05)]
   
+  for(j in 1:length(OPERATING_STATS)){
+    op_stat_type <- names(OPERATING_STATS)
+    OPERATING_STATS[[j]][i,]$method <-names(method_set_list)[method_id]
+    OPERATING_STATS[[j]][i,]$delta_beta <- simul$pars$delta_beta
+    OPERATING_STATS[[j]][i,]$noise <- simul$pars$noise
+    OPERATING_STATS[[j]][i,]$rep <- simul$pars$rep
+  }
+  
   cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs)
-  OPERATING_STATS[i,]$TP_bp <- sum(cs_intersect[which]@ranges@width)
+  
+  ## start: feature operating characteristics
+  OPERATING_STATS$feature$P <- length(simul_grs) 
+  OPERATING_STATS$feature$N <- -1
+  OPERATING_STATS$feature$TP_called <- -1
+  OPERATING_STATS$feature$TP_simul <- -1
+  OPERATING_STATS$feature$FP <- -1
+  OPERATING_STATS$feature$FN <- -1
+  ## end: feature operating characteristics
+  ## start: basepair operating characteristics
+  OPERATING_STATS$basepair$P <- -1 
+  OPERATING_STATS$basepair$N <- -1
+  OPERATING_STATS$basepair$TP_called <- -1
+  OPERATING_STATS$basepair$TP_simul <- -1
+  OPERATING_STATS$basepair$FP <- -1
+  OPERATING_STATS$basepair$FN <- -1
+  ## end: basepair operating characteristics
+  ## start: feature operating characteristics
+  OPERATING_STATS$basepair$P <- -1 
+  OPERATING_STATS$basepair$N <- -1
+  OPERATING_STATS$basepair$TP_called <- -1
+  OPERATING_STATS$basepair$TP_simul <- -1
+  OPERATING_STATS$basepair$FP <- -1
+  OPERATING_STATS$basepair$FN <- -1
+  ## end: feature operating characteristics
   
   
-  OPERATING_STATS[i,]$TP_feature_called_prop <- -1
   
+  cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs)
   
-  OPERATING_STATS[i,]$TP_feature_simul_prop <- -1
-  
-  
-  OPERATING_STATS[i,]$FP_bp <- (sum(simul_grs@ranges@width) -
-                                  OPERATING_STATS[i,]$TP_bp)
-  
-  OPERATING_STATS[i,]$FN_bp <- -1
-  
-  
-  OPERATING_STATS[i,]$AUPR <- -1
-  
-  
-  OPERATING_STATS[i,]$MCC <- -1
-  
-  
-  OPERATING_STATS[i,]$F1 <- -1
-  
-  
-  OPERATING_STATS[i,]$TIME <- -1
   
 }
 

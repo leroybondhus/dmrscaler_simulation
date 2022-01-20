@@ -18,7 +18,9 @@ load("method_set_list.Rdata")
 load("simul_constructor_list.Rdata")
 ```
 
-```{r add granges for simulated dmrs}
+```{r add granges for locs and simulated dmrs}
+locs_gr <- GRanges(seqnames=locs$chr, ranges = IRanges(start=locs$pos, width=1))
+
 chr_seqlengths <- numeric(length=length(unique(locs$chr)))
 names(chr_seqlengths) <- unique(locs$chr)
 for(chr in unique(locs$chr)){
@@ -221,6 +223,7 @@ colnames(OPERATING_STATS[["basepair"]]) <- temp_colnames
 colnames(OPERATING_STATS[["cpg_probe"]]) <- temp_colnames
 
 for(i in 1:length(simul_results)){
+  
   simul_id <- as.numeric(str_match(names(simul_results)[i],
                                    "simul_set_([0-9]*)")[2])
   simul <- simul_constructor_list[[simul_id]]
@@ -283,18 +286,16 @@ for(i in 1:length(simul_results)){
   OPERATING_STATS$basepair[i,]$TN <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
   ## end: basepair operating characteristics
   ## start: cpg_probe operating characteristics
-  OPERATING_STATS$cpg_probe[i,]$P <- -1 
-  OPERATING_STATS$cpg_probe[i,]$N <- -1
-  OPERATING_STATS$cpg_probe[i,]$TP_called <- -1
-  OPERATING_STATS$cpg_probe[i,]$TP_simul <- -1
-  OPERATING_STATS$cpg_probe[i,]$TN <- -1
+  OPERATING_STATS$cpg_probe[i,]$P <- sum( GenomicRanges::countOverlaps(simul_grs, locs_gr) ) 
+  OPERATING_STATS$cpg_probe[i,]$N <- sum( GenomicRanges::countOverlaps(simul_inverse_grs, locs_gr) )
+  OPERATING_STATS$cpg_probe[i,]$TP_called <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
+  OPERATING_STATS$cpg_probe[i,]$TP_simul <- length(GenomicRanges::findOverlaps(locs_gr, cs_intersect)@from)
+  temp <- length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from)  
+  OPERATING_STATS$cpg_probe[i,]$TN <- (OPERATING_STATS$cpg_probe[i,]$N - 
+                                         length(GenomicRanges::findOverlaps(locs_gr, cs_inverse_intersect)@from)) 
+                                         
   ## end: cpg_probe operating characteristics
-  
-  
-  
-  cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs)
-  
-  
+
 }
 
 ```

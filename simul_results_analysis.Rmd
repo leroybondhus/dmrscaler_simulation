@@ -13,6 +13,7 @@ library(doParallel)
 registerDoParallel(detectCores())
 library(ggplot2)
 library(ggExtra)
+library(scales)
 ```
 
 ```{r}
@@ -350,8 +351,6 @@ GGPLOT_LIST <- list()
 
 GGPLOT_LIST$ggl_width_pairs <- list()
 
-
-
 which <- which(WIDTH_PAIRS$delta_beta == unique(WIDTH_PAIRS$delta_beta)[ceiling(length(unique(WIDTH_PAIRS$delta_beta))/2)] &
                WIDTH_PAIRS$noise == unique(WIDTH_PAIRS$noise)[ceiling(length(unique(WIDTH_PAIRS$noise))/2)] &
                grepl("_2",WIDTH_PAIRS$method )) 
@@ -453,7 +452,130 @@ for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
 
 ```
 
+```{r MAPPING VALUE Plots }
+
+GGPLOT_LIST$ggl_mapping_values <- list()
+
+for(method_id in 1:length(unique(MAPPING_VALUES$method))){
+  which <- which(MAPPING_VALUES$method==unique(MAPPING_VALUES$method)[method_id])
+  
+  simul_count <- 600
+  p <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
+      geom_histogram(aes(y= stat(count)/simul_count), bins=50) +
+      facet_grid( delta_beta ~ noise)
+  temp <- ggplot_build(p)
+  dat <-  temp$data[[1]]
+  dat$cumsum <- numeric(length(nrow(dat)))
+  for(pan in unique(dat$PANEL)){
+    dat$cumsum[which(dat$PANEL==pan)] <- cumsum(dat$y[which(dat$PANEL==pan)])
+    dat$delta_beta[which(dat$PANEL==pan)] <- temp$layout$layout$delta_beta[which(temp$layout$layout$PANEL==pan)]
+    dat$noise[which(dat$PANEL==pan)] <- temp$layout$layout$noise[which(temp$layout$layout$PANEL==pan)]
+    temp_dat <- dat[which(dat$PANEL==pan),][length(which(dat$PANEL==pan)),]
+    temp_dat$x <-  ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T))
+    dat <- rbind(dat, temp_dat)
+  }
+  ggplot(dat, aes(x=x,y=cumsum))+geom_line()+facet_grid(delta_beta ~ noise)
+  
+  
+  gg <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
+                 geom_line(data = dat, aes(x=x,y=cumsum))+
+                 geom_histogram(aes(y = stat(count) / simul_count ),color="black", fill="grey60", bins = 50)+
+                 scale_y_continuous(labels = percent ) +
+                 ylab("Percent of Simulated DMRs")+
+                 scale_y_continuous(limits = c(0,1),
+                                    breaks = seq(0,1,0.1))+
+                 scale_x_continuous(limits = c( 
+                   floor(min(log10(MAPPING_VALUES$mapping_value)[!is.infinite(log10(MAPPING_VALUES$mapping_value))],na.rm = T)) ,
+                   ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T)) ),
+                   breaks = seq(
+                     floor(min(log10(MAPPING_VALUES$mapping_value)[!is.infinite(log10(MAPPING_VALUES$mapping_value))],na.rm = T)) ,
+                     ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T)),
+                     0.5)) +
+                 xlab("-log10(Mapping value) ")+
+                 theme_bw()+
+                 theme(
+                   plot.background = element_blank(),
+                   panel.grid.major = element_blank(),
+                   panel.grid.minor = element_blank(),
+                   text=element_text(face="bold", size=10),
+                   strip.text = element_text(face="bold", size=10, angle=0),
+                   axis.text = element_text(face="bold", size=10, angle=0),
+                   legend.position = "none")+
+                 facet_grid( delta_beta ~ noise)
+  plot(gg)
+  
+  
+}
 
 
+### MAPPING VALUES PLOT
+simul_count <- 600
+for(m in unique(MAPPING_VALUES2$method)){
+  MAPPING_VALUES2$frac_covered <- cumsum(MAPPING_VALUES2$mapping_value[which(MAPPING_VALUES2$method==m)])/simul_count
+}
+
+p <-  ggplot(MAPPING_VALUES, aes(x=log10(mapping_value))) +
+  geom_histogram(aes(y = stat(count) / simul_count ), bins = 50)+
+  facet_wrap(. ~ method, ncol = 1 )
+temp <- ggplot_build(p)
+dat <-  temp$data[[1]]
+dat$PANEL <- factor(dat$PANEL); levels(dat$PANEL)<-levels(factor(MAPPING_VALUES2$method))
+dat$method <- dat$PANEL; dat$method <- as.character(dat$method)
+dat$cumsum <- numeric(length=nrow(dat))
+dat$delta_beta <- temp$layout$layout$delta_beta[which(temp$layout$layout$PANEL==p)]
+dat$noise <- temp$layout$layout$noise[which(temp$layout$layout$PANEL==p)]
+for(p in unique(dat$PANEL) ){
+  dat$cumsum[which(dat$PANEL==p)] <- cumsum(dat$y[which(dat$PANEL==p)])
+  dat <- rbind(dat, dat[which(dat$PANEL==p),])
+}
+ggplot(dat, aes(x=x, y=cumsum))+
+  geom_line()+facet_wrap( delta_beta ~ noise)
+
+gg <- ggplot(MAPPING_VALUES2, aes(x=log10(mapping_value))) +
+  #ggtitle("simulated v called dmr length log10")+
+  geom_line(data = dat, aes(x=x,y=cumsum))+
+  geom_histogram(aes(y = stat(count) / simul_count ),color="black", fill="grey60", bins = 50)+
+#  stat_bin(aes(y=cumsum(stat(count)/ simul_count) ),geom="line",color="green")+
+  scale_y_continuous(labels = percent ) +
+  ylab("Percent of Simulated DMRs")+
+  scale_y_continuous(breaks = seq(0,1,0.1))+
+  scale_x_continuous(breaks = seq(-1,max(log10(MAPPING_VALUES$mapping_value)),1))+
+  xlab("-log10(Mapping value) ")+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=10),
+    strip.text = element_text(face="bold", size=10, angle=0),
+    axis.text = element_text(face="bold", size=10, angle=0),
+    legend.position = "none"
+  )+
+  #facet_grid( method ~ . , labeller=labeller(method = labels))
+  facet_wrap(method ~ . , ncol = 4 )# , labeller=labeller(method = labels) )
+gg
+
+filename<-paste(results_dir, date, "_",  "ashg_poster_mapping_ratios_vert.png", sep = "")
+#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+
+#grid.arrange(gg, ncol=1)
+#dev.off()
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 5,
+  height = 3.7,
+  units = c("in"),
+  dpi = 320
+)
+
+
+
+
+
+```
 
 

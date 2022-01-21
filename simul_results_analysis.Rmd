@@ -163,16 +163,16 @@ for(i in 1:length(simul_results)){
 
 ```
 
-```{r auc_pr setup}
+```{r called_results setup}
 
-CALLED_TP_FP <- data.frame("method"=character(),
+CALLED_RESULTS <- data.frame("method"=character(),
                           "delta_beta"=numeric(),
                           "noise"=numeric(),
                           "rep"=numeric(),
                           "TP"=numeric(),
                           "pval"=numeric())
 
-CALLED_TP_FP <- foreach(i = 1:length(simul_results),
+CALLED_RESULTS <- foreach(i = 1:length(simul_results),
                         .combine = rbind,
                         .errorhandling = "pass" ) %dopar% {
   simul_id <- as.numeric(stringr::str_match(names(simul_results)[i],
@@ -182,25 +182,23 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results),
                                     "method_set_([0-9]*)")[2])
   called_grs <- simul_results[[i]]$grange
   simul_grs <- simul$grange
-  
-  TP <- numeric(length = length(called_grs))
-  cs_intersect <-  GenomicRanges::intersect( called_grs, simul_grs) 
-  cs_overlap <- findOverlaps(called_grs, cs_intersect )
-  for(j in 1:length(called_grs)){
-    if(!is.element(j, cs_overlap@from)){ TP[j] <- 0;  next;}
-    which<-cs_overlap@to[which(cs_overlap@from==j)]
-    TP[j] <- sum(cs_intersect[which]@ranges@width) / called_grs[j]@ranges@width
-  }  
-  
-  temp_pval <- called_grs@elementMetadata$pval_region
-  if(length(temp_pval)==0){temp_pval <- NA}
   temp_df <- data.frame("method" = names(method_set_list)[method_id],
                         "delta_beta" = simul$pars$delta_beta,
                         "noise" = simul$pars$noise,
-                        "rep" = simul$pars$rep,
-                        "TP" = TP,
-                        "pval" = temp_pval
-                        )
+                        "rep" = simul$pars$rep)
+  if(length(called_grs)==0){
+    temp_df <- cbind(temp_df, data.frame( "pval" = NA, 
+                                          "chr" = NA,
+                                          "start" = NA,
+                                          "end" = NA))
+  } else {
+    temp_df <- cbind(temp_df, data.frame( "pval" = called_grs$pval_region, 
+                                          "chr" = as.character(seqnames(called_grs)),
+                                          "start" = start(called_grs),
+                                          "end" = end(called_grs)))
+  }
+
+  
   temp_df
 }
 
@@ -211,7 +209,7 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results),
 
 
 
-```{r operating_statistics setup}
+```{r global_operating_statistics setup}
 ### want to measures and record global stats used in benchmark Mallik et al 2018
 ### create  table or supp table to report
 ### TP, FP, FN, Power, Precision, AuPR, MCC, F1, Time
@@ -221,13 +219,13 @@ CALLED_TP_FP <- foreach(i = 1:length(simul_results),
 ###               Precision-Delta_Beta, Power-Delta_Beta
 ###               Precision-Noise, Power-Noise
 ###NOTE this foreach takes ~30-60 min on 12 cores-  save output and load instead of rerunning
-if(file.exists("OPERATING_STATS.Rdata")){
-  load("OPERATING_STATS.Rdata")
+if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
+  load("GLOBAL_OPERATING_STATS.Rdata")
 } else{
   temp_comb <- function(x, ...){
     mapply(rbind,x,...,SIMPLIFY = FALSE)
   }
-  OPERATING_STATS <- foreach(i = 1:length(simul_results),
+  GLOBAL_OPERATING_STATS <- foreach(i = 1:length(simul_results),
                              .combine = 'temp_comb',
                              .errorhandling = "pass" ) %dopar% {
     temp_colnames <- c("method","delta_beta","noise","rep",
@@ -339,7 +337,7 @@ if(file.exists("OPERATING_STATS.Rdata")){
     OP_STATS
     ## end: cpg_probe operating characteristics
   }
-  save(OPERATING_STATS, file="OPERATING_STATS.Rdata")
+  save(GLOBAL_OPERATING_STATS, file="GLOBAL_OPERATING_STATS.Rdata")
 }
 ```
 
@@ -551,4 +549,58 @@ for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
 }
 ```
 
+```{r precision-recall Plots}
+## precision = TP / (TP+FP)
+## recall = TP/(TP+FN) 
+temp_comb <- function(x, ...){
+    mapply(rbind,x,...,SIMPLIFY = FALSE)
+  }
+OPERATING_STATS <- foreach(i = 1:length(simul_results),
+                           .combine = 'temp_comb',
+                           .errorhandling = "pass" ) %dopar% {
+    temp_colnames <- c("method","delta_beta","noise","rep",
+                     "P", "N", ## positive count, negative count
+                     "TP_called", "TP_simul", "TN"  ## 1 minus self: FP,FN,FP 
+                     )
+    OP_STATS <- list()
+    
+    OP_STATS[["feature"]] <- data.frame(matrix(NA, nrow=1,
+                                       ncol=length(temp_colnames)) )
+    OP_STATS[["basepair"]] <- data.frame(matrix(NA, nrow=1,
+                                       ncol=length(temp_colnames)) )
+    OP_STATS[["cpg_probe"]] <- data.frame(matrix(NA, nrow=1,
+                                       ncol=length(temp_colnames)) )
+  
+    colnames(OP_STATS[["feature"]]) <- temp_colnames
+    colnames(OP_STATS[["basepair"]]) <- temp_colnames
+    colnames(OP_STATS[["cpg_probe"]]) <- temp_colnames
+    
+    
+    
+    simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                     "simul_set_([0-9]*)")[2])
+    simul <- simul_constructor_list[[simul_id]]
+    method_id <- as.numeric(str_match(names(simul_results)[i],
+                                      "method_set_([0-9]*)")[2])
+    
+    called_grs <- simul_results[[i]]$grange
+    simul_grs <- simul$grange
+    ### need to set a cutoff to region p-value for TP,FP, FN, etc
+    called_grs <- called_grs[which(called_grs$pval_region < 0.05)]
+    
+}
+
+
+```
+
+```{r fdr-power Plots}
+## fdr =  FP/(TP+FP)
+## power = TP/(TP+FN)
+
+
+```
+
+```{r}
+
+```
 

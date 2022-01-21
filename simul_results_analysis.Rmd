@@ -342,12 +342,63 @@ if(file.exists("OPERATING_STATS.Rdata")){
 }
 ```
 
+```{r set up ggplot list}
+GGPLOT_LIST <- list()
+```
 
 ```{r simul_v_called widths plots}
 
-GGPLOT_LIST <- list()
 GGPLOT_LIST$ggl_width_pairs <- list()
 
+
+
+which <- which(WIDTH_PAIRS$delta_beta == unique(WIDTH_PAIRS$delta_beta)[ceiling(length(unique(WIDTH_PAIRS$delta_beta))/2)] &
+               WIDTH_PAIRS$noise == unique(WIDTH_PAIRS$noise)[ceiling(length(unique(WIDTH_PAIRS$noise))/2)] &
+               grepl("_2",WIDTH_PAIRS$method )) 
+
+dm_methods <- unique(WIDTH_PAIRS$method[which])
+labels <- character(length = length(dm_methods))
+names(labels)<-dm_methods
+for(i in 1:length(dm_methods)){
+  temp_which <- intersect(which, which(WIDTH_PAIRS$method == dm_methods[i]))
+  cor <- cor(log10(WIDTH_PAIRS$simulated_width[temp_which]), log10(WIDTH_PAIRS$called_width[temp_which]), use="complete")
+  labels[i] <- paste(dm_methods[i], " (Pearson's R = ", round(cor,2), ")", sep="")   #\n", unique(WIDTH_PAIRS$params[which]), sep = "" )
+  names(labels[i])<-dm_methods[i]
+}
+
+title <- "simul_v_called widths"
+xmin <- min(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+xmax <- max(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+ymin <- min(log10(WIDTH_PAIRS$called_width),na.rm = T)
+ymax <- max(log10(WIDTH_PAIRS$called_width),na.rm = T)
+gg <- ggplot(WIDTH_PAIRS[which,], aes(x=log10(simulated_width), y=log10(called_width))) +
+  ggtitle(title)+
+  xlab("log10( Simulated DMR Width )")+
+  ylab("log10( Called DMR Width )")+
+  geom_abline(slope = 1, intercept = 0,size=0.2,alpha=0.6)+
+  stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
+  geom_point(size=0.15, alpha=0.3)+
+  xlim(xmin,xmax)+
+  ylim(ymin,ymax)+
+  scale_fill_gradient(low="grey70", high="grey20")+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=8),
+    strip.text = element_text(face="bold", size=8, angle=0),
+    axis.text = element_text(face="bold", size=8, angle=0),
+    legend.position = "none"
+  ) + #facet_grid( method ~ .) + geom_text(data = gg_labels, aes(label=label), x=(xmax+xmin)/2, y=ymax-0.1, size=3)
+  facet_wrap(. ~ method, ncol = 1 , labeller=labeller(method = labels) )
+gg
+GGPLOT_LIST$ggl_width_pairs[[title]] <- gg
+
+
+
+
+### noise x delta_beta
 for(method_id in 1:length(unique(WIDTH_PAIRS$method))){
   which <- which(WIDTH_PAIRS$method==unique(WIDTH_PAIRS$method)[method_id])
   gg_labels <- merge(data.frame(delta_beta=unique(WIDTH_PAIRS$delta_beta[which])),
@@ -367,33 +418,42 @@ for(method_id in 1:length(unique(WIDTH_PAIRS$method))){
                                            sep = "")
     }
   }
-    
-  
-
+  title <- unique(WIDTH_PAIRS$method)[method_id]
+  xmin <- min(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+  xmax <- max(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+  ymin <- min(log10(WIDTH_PAIRS$called_width),na.rm = T)
+  ymax <- max(log10(WIDTH_PAIRS$called_width),na.rm = T)
   gg <- ggplot(WIDTH_PAIRS[which,], aes(x=log10(simulated_width), y=log10(called_width))) +
+    ggtitle(title)+
     xlab("log10( Simulated DMR Width )")+
     ylab("log10( Called DMR Width )")+
     geom_abline(slope = 1, intercept = 0,size=0.2,alpha=0.6)+
     stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
     geom_point(size=0.15, alpha=0.3)+
+    xlim(xmin,xmax)+
+    ylim(ymin,ymax)+
     scale_fill_gradient(low="grey70", high="grey20")+
     theme_bw()+
     theme(
       plot.background = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      text=element_text(face="bold", size=6),
-      strip.text = element_text(face="bold", size=6, angle=0),
-      axis.text = element_text(face="bold", size=6, angle=0),
+      text=element_text(face="bold", size=8),
+      strip.text = element_text(face="bold", size=8, angle=0),
+      axis.text = element_text(face="bold", size=8, angle=0),
       legend.position = "none"
-    ) + facet_grid( delta_beta ~ noise) + geom_text(data = gg_labels, aes(label=label), x=4, y=6.5, size=3)
-  
-  facet_wrap(delta_beta ~ noise )
-  gg
+    ) + facet_grid( delta_beta ~ noise, labeller = label_both) + geom_text(data = gg_labels, aes(label=label), x=(xmax+xmin)/2, y=ymax-0.1, size=3)
+  GGPLOT_LIST$ggl_width_pairs[[title]] <- gg
+}
+
+for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
+  plot(GGPLOT_LIST$ggl_width_pairs[[i]])
 }
 
 
-
-
 ```
+
+
+
+
 

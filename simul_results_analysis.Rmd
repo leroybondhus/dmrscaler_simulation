@@ -583,7 +583,7 @@ OPERATING_STATS <- foreach(i = 1:length(simul_results),
     }
   
     temp_seq <- floor(seq(from=1,to=length(called_grs),
-                          length.out = min(length(called_grs),100)))
+                          length.out = min(length(called_grs),50)))
     temp_colnames <- c("method","delta_beta","noise","rep",
                        "Precision", "Recall", "FDR", "Power" )
     temp_df <- data.frame(matrix(NA, nrow=length(temp_seq),
@@ -601,6 +601,7 @@ OPERATING_STATS <- foreach(i = 1:length(simul_results),
     
     
     for(j in 1:length(temp_seq)){
+      #print(j)
       called_grs_sub <- called_grs[1:temp_seq[j]]
       cs_overlap <-  findOverlaps( called_grs_sub, simul_grs)
       simul_grs$TP <- 0
@@ -633,10 +634,7 @@ OPERATING_STATS <- foreach(i = 1:length(simul_results),
       OP_STATS$cpg_probe$Power[j] <- OP_STATS$cpg_probe$Recall[j]
 
     }
-      
-    
-    
-    
+    OP_STATS
     
     
 }

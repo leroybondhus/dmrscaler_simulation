@@ -363,7 +363,7 @@ for(i in 1:length(dm_methods)){
   names(labels[i])<-dm_methods[i]
 }
 
-title <- "simul_v_called widths"
+title <- "partition_by_method"
 xmin <- min(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
 xmax <- max(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
 ymin <- min(log10(WIDTH_PAIRS$called_width),na.rm = T)
@@ -473,7 +473,7 @@ for(pan in unique(dat$PANEL)){
   dat <- rbind(dat, temp_dat)
 }
 
-title <- "mapping_values"
+title <- "partition_by_method"
 gg <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
   ggtitle(title)+
   geom_line(data = dat, aes(x=x,y=cumsum))+
@@ -489,9 +489,9 @@ gg <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
     plot.background = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    text=element_text(face="bold", size=10),
-    strip.text = element_text(face="bold", size=10, angle=0),
-    axis.text = element_text(face="bold", size=10, angle=0),
+    text=element_text(face="bold", size=8),
+    strip.text = element_text(face="bold", size=8, angle=0),
+    axis.text = element_text(face="bold", size=8, angle=0),
     legend.position = "none")+
   facet_wrap(method ~ . , nrow=4)
 GGPLOT_LIST$ggl_mapping_values[[title]] <- gg
@@ -522,23 +522,23 @@ for(method_id in 1:length(unique(MAPPING_VALUES$method))){
     scale_y_continuous(labels = percent ) +
     ylab("Percent of Simulated DMRs")+
     scale_y_continuous(limits = c(0,1),
-                       breaks = seq(0,1,0.1))+
+                       breaks = seq(0,1,0.2))+
     scale_x_continuous(limits = c(
       floor(min(log10(MAPPING_VALUES$mapping_value)[!is.infinite(log10(MAPPING_VALUES$mapping_value))],na.rm = T)) ,
       ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T)) ),
    breaks = seq(
      floor(min(log10(MAPPING_VALUES$mapping_value)[!is.infinite(log10(MAPPING_VALUES$mapping_value))],na.rm = T)) ,
      ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T)),
-     0.5)) +
+     1)) +
     xlab("-log10(Mapping value) ")+
     theme_bw()+
     theme(
       plot.background = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      text=element_text(face="bold", size=10),
-      strip.text = element_text(face="bold", size=10, angle=0),
-      axis.text = element_text(face="bold", size=10, angle=0),
+      text=element_text(face="bold", size=8),
+      strip.text = element_text(face="bold", size=8, angle=0),
+      axis.text = element_text(face="bold", size=8, angle=0),
       legend.position = "none")+
     facet_grid( delta_beta ~ noise,  labeller = label_both)
   GGPLOT_LIST$ggl_mapping_values[[title]] <- gg
@@ -642,14 +642,32 @@ OPERATING_STATS <- foreach(i = 1:length(simul_results),
 
 ```
 
-```{r fdr-power Plots}
-## fdr =  FP/(TP+FP)
-## power = TP/(TP+FN)
+
+```{r export all plots}
+figures_dir <- paste(getwd(), "/results/figures/", sep="")
+
+for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
+  filename <- paste(figures_dir,
+                    "simul_v_called_width__",
+                    names(GGPLOT_LIST$ggl_width_pairs)[i],".png",sep="" )
+  if(grepl("partition_by_method", filename)){
+    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_width_pairs[[i]], device = "png", width=2.5, height = 7, units=c("in"), dpi=320) 
+  } else {
+    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_width_pairs[[i]], device = "png", width=3.5, height = 4, units=c("in"), dpi=200) 
+  }
+}
 
 
-```
-
-```{r}
+for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
+  filename <- paste(figures_dir,
+                    "mapping_values__",
+                    names(GGPLOT_LIST$ggl_mapping_values)[i],".png",sep="" )
+  if(grepl("partition_by_method", filename)){
+    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_mapping_values[[i]], device = "png", width=2.5, height = 7, units=c("in"), dpi=320) 
+  } else {
+    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_mapping_values[[i]], device = "png", width=3.5, height = 4, units=c("in"), dpi=200) 
+  }
+}
 
 ```
 

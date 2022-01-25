@@ -225,7 +225,7 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
   temp_comb <- function(x, ...){
     mapply(rbind,x,...,SIMPLIFY = FALSE)
   }
-  GLOBAL_OPERATING_STATS <- foreach(i = 1:4,# length(simul_results),
+  GLOBAL_OPERATING_STATS <- foreach(i = 1:40,# length(simul_results),
                              .combine = 'temp_comb',
                              .errorhandling = "pass" ) %dopar% {
     temp_colnames <- c("method","delta_beta","noise","rep",
@@ -713,6 +713,36 @@ for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
 ```
 
 ```{r export all tables}
+
+## full table for supplemental
+GLOBAL_OPERATING_STATS
+## summary table for main
+
+GOS_summary <- list()
+for(i in 1:length(GLOBAL_OPERATING_STATS)){
+  GOS_summary[[ names(GLOBAL_OPERATING_STATS)[i] ]] <- list()
+  temp <- GLOBAL_OPERATING_STATS[[i]]
+  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC) ~ method + delta_beta + noise, data=temp, FUN=mean, na.rm=TRUE)
+  GOS_summary[[i]]$gos_means <- temp_df
+  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC) ~ method + delta_beta + noise, data=temp, FUN=sd, na.rm=TRUE)
+  GOS_summary[[i]]$gos_std <- temp_df
+  
+  temp_df <- GOS_summary[[i]]$gos_means
+  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=3)
+  temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
+  
+  GOS_summary[[i]]$gos_mean_std <- temp_df
+  
+  temp_df <- GOS_summary[[i]]$gos_std
+  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=1)
+  temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
+  
+  temp_df[,4:ncol(temp_df)] <- paste(as.matrix(GOS_summary[[i]]$gos_mean_std[,4:ncol(temp_df)])," (\u00b1 ", as.matrix(temp_df[,4:ncol(temp_df)]),")", sep=""  )
+  GOS_summary[[i]]$gos_mean_std <- temp_df
+}
+
+write.csv(GOS_summary$feature$gos_mean_std[grep("_1",GOS_summary$feature$gos_mean_std$method),], "temp_simul_result_table.csv")
+
 
 
 ```

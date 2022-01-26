@@ -60,7 +60,7 @@ dmr_buffer <- 10
 simul_pars <- merge(merge(merge(data.frame("num_samples"=c(8)),
                                 data.frame("delta_beta"=c(0.1,0.2,0.4))),
                           data.frame("noise" = c(0,0.25,0.5))),
-                    data.frame("rep"=c(1:3))
+                    data.frame("rep"=c(1:5))
 )
 simul_pars <- simul_pars[order(simul_pars$num_samples, simul_pars$delta_beta, simul_pars$noise, simul_pars$rep),]
 simul_pars_list <- split(simul_pars, 1:nrow(simul_pars))

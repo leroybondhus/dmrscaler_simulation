@@ -225,7 +225,7 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
   temp_comb <- function(x, ...){
     mapply(rbind,x,...,SIMPLIFY = FALSE)
   }
-  GLOBAL_OPERATING_STATS <- foreach(i = 1:40,# length(simul_results),
+  GLOBAL_OPERATING_STATS <- foreach(i = 1:length(simul_results),
                              .combine = 'temp_comb',
                              .errorhandling = "pass" ) %dopar% {
     temp_colnames <- c("method","delta_beta","noise","rep",
@@ -602,7 +602,7 @@ temp_comb <- function(x, ...){
 if(file.exists("OPERATING_STATS.Rdata")){
   load("OPERATING_STATS.Rdata")
 } else{
-  OPERATING_STATS <- foreach(i = 1:6 , #length(simul_results),
+  OPERATING_STATS <- foreach(i = 1:length(simul_results),
                              .combine = 'temp_comb',
                              .errorhandling = "pass" ) %dopar% {
                                
@@ -689,45 +689,52 @@ if(file.exists("OPERATING_STATS.Rdata")){
 
 OPERATING_STATS
 
-
-
-auc <- list("DMRscaler"=data.frame(),"bumphunter"=data.frame(),"DMRcate"=data.frame())
-for(m in names(auc)){
-  auc[[m]]<-data.frame(
-    "feature_auc" = auc(P_R[[m]]$R_feature, P_R[[m]]$P_feature),
-    "bp_auc" = auc(P_R[[m]]$R_bp, P_R[[m]]$P_bp)
-  )
+#agg_op_stats <- 
+for(i in 1:length(OPERATING_STATS)){
+  gg <- ggplot(OPERATING_STATS[[i]][which(OPERATING_STATS[[i]]$rep==1),], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method, color=method)) +
+    facet_grid( delta_beta ~ noise,  labeller = label_both)
+  plot(gg)
+  
 }
-
-df_temp <- data.frame()
-for(i in 1:length(P_R)){
-  df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(paste(names(P_R)[i]) ))) #, "\nAUC = ",round(auc[[i]]$feature_auc,2), sep = "" ))  )) 
-}
-
-gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
-  ggtitle("Precision-Recall feature")+
-  labs(subtitle = paste(
-         "DMRscaler AUC=", round(auc[["DMRscaler"]]$feature_auc,3),
-         ", Bumphunter AUC=", round(auc[["bumphunter"]]$feature_auc,3),
-         ", DMRcate AUC=", round(auc[["DMRcate"]]$feature_auc,3)
-         ))+
-  xlab("Recall")+
-  ylab("Precision")+
-  geom_path(aes(linetype=method), size=0.5)+
-  xlim(0,1)+
-  ylim(0,1)+
-  theme_bw()+
-  theme(
-    plot.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    text=element_text(face="bold", size=6),
-    strip.text = element_text(face="bold", size=6, angle=0),
-    axis.text = element_text(face="bold", size=6, angle=0)
-  )
-
-filename<-paste(results_dir, date, "_",  "AUCPR_feature.tiff", sep = "")
-#tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
+# 
+# auc <- list("DMRscaler"=data.frame(),"bumphunter"=data.frame(),"DMRcate"=data.frame())
+# for(m in names(auc)){
+#   auc[[m]]<-data.frame(
+#     "feature_auc" = auc(P_R[[m]]$R_feature, P_R[[m]]$P_feature),
+#     "bp_auc" = auc(P_R[[m]]$R_bp, P_R[[m]]$P_bp)
+#   )
+# }
+# 
+# df_temp <- data.frame()
+# for(i in 1:length(P_R)){
+#   df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(paste(names(P_R)[i]) ))) #, "\nAUC = ",round(auc[[i]]$feature_auc,2), sep = "" ))  )) 
+# }
+# 
+# gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
+#   ggtitle("Precision-Recall feature")+
+#   labs(subtitle = paste(
+#          "DMRscaler AUC=", round(auc[["DMRscaler"]]$feature_auc,3),
+#          ", Bumphunter AUC=", round(auc[["bumphunter"]]$feature_auc,3),
+#          ", DMRcate AUC=", round(auc[["DMRcate"]]$feature_auc,3)
+#          ))+
+#   xlab("Recall")+
+#   ylab("Precision")+
+#   geom_path(aes(linetype=method), size=0.5)+
+#   xlim(0,1)+
+#   ylim(0,1)+
+#   theme_bw()+
+#   theme(
+#     plot.background = element_blank(),
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank(),
+#     text=element_text(face="bold", size=6),
+#     strip.text = element_text(face="bold", size=6, angle=0),
+#     axis.text = element_text(face="bold", size=6, angle=0)
+#   )
+# 
+# filename<-paste(results_dir, date, "_",  "AUCPR_feature.tiff", sep = "")
+# #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
 
 
 

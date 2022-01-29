@@ -689,14 +689,65 @@ if(file.exists("OPERATING_STATS.Rdata")){
 
 OPERATING_STATS
 
-#agg_op_stats <- 
+ 
 for(i in 1:length(OPERATING_STATS)){
-  gg <- ggplot(OPERATING_STATS[[i]][which(OPERATING_STATS[[i]]$rep==1),], aes(x=Recall, y=Precision))+
+  OPERATING_STATS[[i]]$db_method_noise_rep <- paste(OPERATING_STATS[[i]]$method,
+                                                    OPERATING_STATS[[i]]$delta_beta,
+                                                    OPERATING_STATS[[i]]$noise,
+                                                    OPERATING_STATS[[i]]$rep, sep="_")
+  OPERATING_STATS[[i]]$db_method_noise <- paste(OPERATING_STATS[[i]]$method,
+                                                    OPERATING_STATS[[i]]$delta_beta,
+                                                    OPERATING_STATS[[i]]$noise, sep="_")
+  OPERATING_STATS[[i]]$seq_id <- 0
+  for(j in unique(OPERATING_STATS[[i]]$db_method_noise_rep)){
+    which <- which(OPERATING_STATS[[i]]$db_method_noise_rep == j)
+    OPERATING_STATS[[i]]$seq_id[which] <- seq(1:length(which))
+    if(length(which)!=50){print(paste(j, length(which)))}
+  }
+  
+  OPERATING_STATS[[i]]$db_method_noise_seq_id <- paste(OPERATING_STATS[[i]]$method,
+                                                  OPERATING_STATS[[i]]$delta_beta,
+                                                  OPERATING_STATS[[i]]$noise,
+                                                  str_pad(OPERATING_STATS[[i]]$seq_id, 2, pad="0"), sep="_")
+
+}
+
+
+
+os_summary <- list()
+for(i in 1:length(OPERATING_STATS)){
+  os_summary[[ names(OPERATING_STATS)[i] ]] <- aggregate(
+    cbind(Precision, Recall, FDR, Power) ~ method + delta_beta + noise + seq_id + db_method_noise + db_method_noise_seq_id,
+    data=OPERATING_STATS[[i]], FUN=mean, na.rm=TRUE
+  )
+  
+  for(j in unique(os_summary[[i]]$db_method_noise)){
+    which <- which(os_summary[[i]]$db_method_noise == j)
+    which_max <- which.max(os_summary[[i]][which,]$seq_id)
+    temp_row <- os_summary[[i]][which,][which_max,]
+    temp_row$Precision <- 0
+    temp_row$FDR <- 1
+    temp_row$seq_id <- temp_row$seq_id+1
+    os_summary[[i]] <- rbind(os_summary[[i]],temp_row )
+  }
+}
+
+
+
+
+
+
+#agg_op_stats <- 
+for(i in 1:length(os_summary)){
+  gg <- ggplot(os_summary[[i]], aes(x=Recall, y=Precision))+
     geom_path(aes(linetype=method, color=method)) +
     facet_grid( delta_beta ~ noise,  labeller = label_both)
   plot(gg)
   
 }
+
+
+
 # 
 # auc <- list("DMRscaler"=data.frame(),"bumphunter"=data.frame(),"DMRcate"=data.frame())
 # for(m in names(auc)){

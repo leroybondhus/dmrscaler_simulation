@@ -958,7 +958,7 @@ for(i in 1:length(GLOBAL_OPERATING_STATS)){
   GOS_summary[[i]]$gos_std <- temp_df
   
   temp_df <- GOS_summary[[i]]$gos_means
-  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=3)
+  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=2)
   temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
   
   GOS_summary[[i]]$gos_mean_std <- temp_df
@@ -967,24 +967,59 @@ for(i in 1:length(GLOBAL_OPERATING_STATS)){
   temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=1)
   temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
   
-  temp_df[,4:ncol(temp_df)] <- paste(as.matrix(GOS_summary[[i]]$gos_mean_std[,4:ncol(temp_df)])," (\u00b1 ", as.matrix(temp_df[,4:ncol(temp_df)]),")", sep=""  )
+  temp_df[,4:ncol(temp_df)] <- paste(as.matrix(GOS_summary[[i]]$gos_mean_std[,4:ncol(temp_df)]),"(\u00b1", as.matrix(temp_df[,4:ncol(temp_df)]),")", sep=""  )
   GOS_summary[[i]]$gos_mean_std <- temp_df
 }
 
+
+
+
+
 for(i in 1:length(GOS_summary)){
-  filename <- paste(tables_dir, "global_operating_stats_summary__", names(GOS_summary)[i],".csv", sep="")
-  write.csv(GOS_summary[[i]]$gos_mean_std, file = filename)
+  
+  export_gos_summary <- merge(GOS_summary[[i]]$gos_mean_std, aucpr_list[[i]]$aucpr_df, sort=F)
+  export_gos_summary$AUCPR <- paste(as.character(signif(export_gos_summary$aucpr,2)),"(\u00b1",
+                                    as.character(signif(export_gos_summary$aucpr_sd,1)), ")", sep="")
+  export_gos_summary$aucpr <- NULL
+  export_gos_summary$aucpr_sd <- NULL
+  
+  colnames(export_gos_summary)[which(colnames(export_gos_summary)=="Precision")] <- "Precision = 1-FDR"
+  export_gos_summary$FDR <- NULL
+  
+  export_gos_summary$method <- gsub("bumphunter_2", "bumphunter",export_gos_summary$method)
+  export_gos_summary$method <- gsub("combp_2", "comb-p",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrcate_2", "DMRcate",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrscaler_2", "DMRscaler",export_gos_summary$method)
+  
+  temp <- export_gos_summary[grep("_1",export_gos_summary$method, invert = T),]
+  rownames(temp) <- NULL
   filename <- paste(tables_dir, "global_operating_stats_summary_2only__", names(GOS_summary)[i],".csv", sep="")
-  write.csv(GOS_summary[[i]]$gos_mean_std[grep("_2",GOS_summary[[i]]$gos_mean_std$method),], file = filename)
+  write.csv(temp, file = filename)
+  
+  export_gos_summary <- merge(GOS_summary[[i]]$gos_mean_std, aucpr_list[[i]]$aucpr_df, sort=F)
+  export_gos_summary$AUCPR <- paste(as.character(export_gos_summary$aucpr),"(\u00b1",
+                                    as.character(signif(export_gos_summary$aucpr_sd,1)), ")", sep="")
+  export_gos_summary$aucpr <- NULL
+  export_gos_summary$aucpr_sd <- NULL
+  
+  colnames(export_gos_summary)[which(colnames(export_gos_summary)=="Precision")] <- "Precision = 1-FDR"
+  export_gos_summary$FDR <- NULL
+  export_gos_summary$method <- gsub("bumphunter_2", "bumphunter:\nmaxWidth=1Mb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("combp_2", "comb-p:\ndist=1Mb,step=5kb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrcate_2", "DMRcate:\nlambda=1Mb,C=2000",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrscaler_2", "DMRscaler:\nbenj-yuk",export_gos_summary$method)
+  export_gos_summary$method <- gsub("bumphunter_1", "bumphunter:\nmaxWidth=1Mb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("combp_1", "comb-p:\ndist=1Mb,step=5kb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrcate_1", "DMRcate:\nlambda=1Mb,C=2000",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrscaler_1", "DMRscaler:\nbonferroni",export_gos_summary$method)
+  
+  
+  filename <- paste(tables_dir, "global_operating_stats_summary__", names(GOS_summary)[i],".csv", sep="")
+  write.csv(export_gos_summary, file = filename)
+  
 }
 
 
-for(i in 1:length(aucpr_list)){
-  filename <- paste(tables_dir, "aucpr_", names(aucpr_list)[i],".csv", sep="")
-  write.csv(aucpr_list[[i]]$aucpr_df, file = filename)
-  filename <- paste(tables_dir, "aucpr_2_only_", names(GOS_summary)[i],".csv", sep="")
-  write.csv(aucpr_list[[i]]$aucpr_df[grep("_2",aucpr_list[[i]]$aucpr_df$method),], file = filename)
-}
 
 ```
 

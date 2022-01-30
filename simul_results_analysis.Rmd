@@ -14,12 +14,16 @@ registerDoParallel(detectCores()-2)
 library(ggplot2)
 library(ggExtra)
 library(scales)
+library(MESS)
 ```
 
 ```{r}
 load("locs.Rdata")
 load("method_set_list.Rdata")
 load("simul_constructor_list.Rdata")
+
+figures_dir <- "./results/figures/"
+tables_dir <- "./results/tables/"
 ```
 
 ```{r add granges for locs and simulated dmrs}
@@ -205,10 +209,6 @@ CALLED_RESULTS <- foreach(i = 1:length(simul_results),
 ```
 
 
-
-
-
-
 ```{r global_operating_statistics setup}
 ### want to measures and record global stats used in benchmark Mallik et al 2018
 ### create  table or supp table to report
@@ -377,7 +377,7 @@ for(i in 1:length(GLOBAL_OPERATING_STATS)){
     sqrt( (1-temp$Recall) * (1-temp$Specificity) * (1-temp$Precision) * (1-(temp$TN_called / temp$Called_N)) )
   GLOBAL_OPERATING_STATS[[i]] <- temp
 }
-GLOBAL_OPERATING_STATS
+#GLOBAL_OPERATING_STATS
 
 
 ```
@@ -390,8 +390,8 @@ GGPLOT_LIST <- list()
 
 GGPLOT_LIST$ggl_width_pairs <- list()
 
-which <- which(WIDTH_PAIRS$delta_beta == unique(WIDTH_PAIRS$delta_beta)[ceiling(length(unique(WIDTH_PAIRS$delta_beta))/2)] &
-               WIDTH_PAIRS$noise == unique(WIDTH_PAIRS$noise)[ceiling(length(unique(WIDTH_PAIRS$noise))/2)] &
+which <- which(WIDTH_PAIRS$delta_beta == 0.2 &
+               WIDTH_PAIRS$noise == 0.5 &
                grepl("_2",WIDTH_PAIRS$method )) 
 
 dm_methods <- unique(WIDTH_PAIRS$method[which])
@@ -467,7 +467,7 @@ for(method_id in 1:length(unique(WIDTH_PAIRS$method))){
     ylab("log10( Called DMR Width )")+
     geom_abline(slope = 1, intercept = 0,size=0.2,alpha=0.6)+
     stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
-    geom_point(size=0.15, alpha=0.3)+
+    geom_point(size=0.3, alpha=0.3)+
     xlim(xmin,xmax)+
     ylim(ymin,ymax)+
     scale_fill_gradient(low="grey70", high="grey20")+
@@ -476,16 +476,31 @@ for(method_id in 1:length(unique(WIDTH_PAIRS$method))){
       plot.background = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      text=element_text(face="bold", size=8),
-      strip.text = element_text(face="bold", size=8, angle=0),
-      axis.text = element_text(face="bold", size=8, angle=0),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0),
       legend.position = "none"
     ) + facet_grid( delta_beta ~ noise, labeller = label_both) + geom_text(data = gg_labels, aes(label=label), x=(xmax+xmin)/2, y=ymax-0.1, size=3)
   GGPLOT_LIST$ggl_width_pairs[[title]] <- gg
 }
 
+
+
 for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
   plot(GGPLOT_LIST$ggl_width_pairs[[i]])
+  filename <- paste(figures_dir, names(GGPLOT_LIST$ggl_width_pairs)[i],"_called_width_v_simul_width.png",sep = "") 
+  ggsave(
+    filename=filename,
+    plot = GGPLOT_LIST$ggl_width_pairs[[i]],
+    device = "png",
+    path = NULL,
+    scale = 1,
+    width = ifelse(grepl("partition_by_method",filename), 3,6),
+    height = 6,
+    units = c("in"),
+    dpi = ifelse(grepl("partition_by_method",filename), 320,230)
+  )
+  
 }
 
 
@@ -493,13 +508,13 @@ for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
 
 ```{r MAPPING VALUE Plots }
 simul_count <- 1000
+
 GGPLOT_LIST$ggl_mapping_values <- list()
 
-which <- which(MAPPING_VALUES$delta_beta ==
-                 unique(MAPPING_VALUES$delta_beta)[ceiling(length(unique(MAPPING_VALUES$delta_beta))/2)] &
-               MAPPING_VALUES$noise ==
-                 unique(MAPPING_VALUES$noise)[ceiling(length(unique(MAPPING_VALUES$noise))/2)] &
-               grepl("_2",MAPPING_VALUES$method )) 
+which <- which(MAPPING_VALUES$delta_beta == 0.2 &
+               MAPPING_VALUES$noise == 0.5 &
+               grepl("_2",MAPPING_VALUES$method ))
+
 p <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
     geom_histogram(aes(y= stat(count)/simul_count), bins=50) +
     facet_wrap( method ~ . , nrow=4)
@@ -577,9 +592,9 @@ for(method_id in 1:length(unique(MAPPING_VALUES$method))){
       plot.background = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      text=element_text(face="bold", size=8),
-      strip.text = element_text(face="bold", size=8, angle=0),
-      axis.text = element_text(face="bold", size=8, angle=0),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0),
       legend.position = "none")+
     facet_grid( delta_beta ~ noise,  labeller = label_both)
   GGPLOT_LIST$ggl_mapping_values[[title]] <- gg
@@ -587,7 +602,22 @@ for(method_id in 1:length(unique(MAPPING_VALUES$method))){
 
 for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
   plot(GGPLOT_LIST$ggl_mapping_values[[i]])
+  filename <- paste(figures_dir, names(GGPLOT_LIST$ggl_mapping_values)[i],"_mapping_value.png",sep = "") 
+  ggsave(
+    filename=filename,
+    plot = GGPLOT_LIST$ggl_mapping_values[[i]],
+    device = "png",
+    path = NULL,
+    scale = 1,
+    width = ifelse(grepl("partition_by_method",filename), 3,6),
+    height = 6,
+    units = c("in"),
+    dpi = ifelse(grepl("partition_by_method",filename), 320,230)
+  )
+  
 }
+
+
 ```
 
 ```{r precision-recall Plots}
@@ -714,6 +744,11 @@ for(i in 1:length(OPERATING_STATS)){
 
 
 
+```
+
+
+```{r generate p-r and fdr-power curves}
+
 os_summary <- list()
 for(i in 1:length(OPERATING_STATS)){
   os_summary[[ names(OPERATING_STATS)[i] ]] <- aggregate(
@@ -733,92 +768,95 @@ for(i in 1:length(OPERATING_STATS)){
 }
 
 
-
-
-
-
-#agg_op_stats <- 
+GGPLOT_LIST$P_R <- list()
 for(i in 1:length(os_summary)){
-  gg <- ggplot(os_summary[[i]], aes(x=Recall, y=Precision))+
-    geom_path(aes(linetype=method, color=method)) +
-    facet_grid( delta_beta ~ noise,  labeller = label_both)
-  plot(gg)
   
+  which <- which(os_summary[[i]]$delta_beta == 0.2 &
+               os_summary[[i]]$noise == 0.5 )
+  title <- paste("p_r_partition_by_method__",names(os_summary)[i] , sep="")
+  gg <- ggplot(os_summary[[i]][which,], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method, color=method), size=0.8) +
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0)
+    )
+    ggtitle(title)
+  plot(gg)
+  GGPLOT_LIST$P_R[[title]] <- gg
+  
+  title <- paste("p_r_delta_beta_noise__",names(os_summary)[i] , sep="")
+  gg <- ggplot(os_summary[[i]], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method, color=method), size=0.8) +
+    facet_grid( delta_beta ~ noise,  labeller = label_both)+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0)
+    )
+  plot(gg)
+  GGPLOT_LIST$P_R[[title]] <- gg
+}
+
+for(i in 1:length(GGPLOT_LIST$P_R)){
+  plot(GGPLOT_LIST$P_R[[i]])
+  filename <- paste(figures_dir, names(GGPLOT_LIST$P_R)[i],"_P_R.png",sep = "") 
+  ggsave(
+    filename=filename,
+    plot = GGPLOT_LIST$P_R[[i]],
+    device = "png",
+    path = NULL,
+    scale = 1,
+    width = ifelse(grepl("partition_by_method",filename), 5,8),
+    height = ifelse(grepl("partition_by_method",filename), 3,7),
+    units = c("in"),
+    dpi = ifelse(grepl("partition_by_method",filename), 320,230)
+  )
 }
 
 
+aucpr_df_model <- data.frame(method=character(), delta_beta=numeric(),
+                       noise=numeric(), aucpr=character(), rep=character())
+aucpr_list <- list()
 
-# 
-# auc <- list("DMRscaler"=data.frame(),"bumphunter"=data.frame(),"DMRcate"=data.frame())
-# for(m in names(auc)){
-#   auc[[m]]<-data.frame(
-#     "feature_auc" = auc(P_R[[m]]$R_feature, P_R[[m]]$P_feature),
-#     "bp_auc" = auc(P_R[[m]]$R_bp, P_R[[m]]$P_bp)
-#   )
-# }
-# 
-# df_temp <- data.frame()
-# for(i in 1:length(P_R)){
-#   df_temp <- rbind(df_temp, cbind(P_R[[i]],"method"=rep(paste(names(P_R)[i]) ))) #, "\nAUC = ",round(auc[[i]]$feature_auc,2), sep = "" ))  )) 
-# }
-# 
-# gg <- ggplot(df_temp, aes(x=R_bp, y=P_bp))+
-#   ggtitle("Precision-Recall feature")+
-#   labs(subtitle = paste(
-#          "DMRscaler AUC=", round(auc[["DMRscaler"]]$feature_auc,3),
-#          ", Bumphunter AUC=", round(auc[["bumphunter"]]$feature_auc,3),
-#          ", DMRcate AUC=", round(auc[["DMRcate"]]$feature_auc,3)
-#          ))+
-#   xlab("Recall")+
-#   ylab("Precision")+
-#   geom_path(aes(linetype=method), size=0.5)+
-#   xlim(0,1)+
-#   ylim(0,1)+
-#   theme_bw()+
-#   theme(
-#     plot.background = element_blank(),
-#     panel.grid.major = element_blank(),
-#     panel.grid.minor = element_blank(),
-#     text=element_text(face="bold", size=6),
-#     strip.text = element_text(face="bold", size=6, angle=0),
-#     axis.text = element_text(face="bold", size=6, angle=0)
-#   )
-# 
-# filename<-paste(results_dir, date, "_",  "AUCPR_feature.tiff", sep = "")
-# #tiff(filename = filename, width = 8, height=4, units = "in", res = 500, pointsize = 1)
-
+for(i in 1:length(OPERATING_STATS)){
+  aucpr_df <- aucpr_df_model
+  for(j in unique(OPERATING_STATS[[i]]$db_method_noise_rep)){
+    which <- which(OPERATING_STATS[[i]]$db_method_noise_rep==j)
+    
+    aucpr_df <-  rbind(aucpr_df,
+                       data.frame(method=unique(OPERATING_STATS[[i]]$method[which]),
+                                  delta_beta=unique(OPERATING_STATS[[i]]$delta_beta[which]),
+                                  noise=unique(OPERATING_STATS[[i]]$noise[which]),
+                                  rep=unique(OPERATING_STATS[[i]]$rep[which]),
+                                  aucpr=
+                                    auc(OPERATING_STATS[[i]]$Recall[which],OPERATING_STATS[[i]]$Precision[which] )
+                       )
+    )
+    
+  }
+  head(aucpr_df)
+  
+  temp_df <-aggregate(cbind(aucpr) ~ method + delta_beta + noise, data=aucpr_df, FUN=mean, na.rm=TRUE)
+  temp_df$aucpr_sd <-aggregate(cbind(aucpr) ~ method + delta_beta + noise, data=aucpr_df, FUN=sd, na.rm=TRUE)$aucpr
+  
+  
+  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=3)
+  aucpr_list[[names(OPERATING_STATS)[i] ]]$aucpr_df <- temp_df
+}
 
 
 ```
 
 
-```{r export all plots}
-figures_dir <- paste(getwd(), "/results/figures/", sep="")
-
-for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
-  filename <- paste(figures_dir,
-                    "simul_v_called_width__",
-                    names(GGPLOT_LIST$ggl_width_pairs)[i],".png",sep="" )
-  if(grepl("partition_by_method", filename)){
-    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_width_pairs[[i]], device = "png", width=2.5, height = 7, units=c("in"), dpi=320) 
-  } else {
-    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_width_pairs[[i]], device = "png", width=3.5, height = 4, units=c("in"), dpi=200) 
-  }
-}
-
-
-for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
-  filename <- paste(figures_dir,
-                    "mapping_values__",
-                    names(GGPLOT_LIST$ggl_mapping_values)[i],".png",sep="" )
-  if(grepl("partition_by_method", filename)){
-    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_mapping_values[[i]], device = "png", width=2.5, height = 7, units=c("in"), dpi=320) 
-  } else {
-    ggsave(filename = filename, plot = GGPLOT_LIST$ggl_mapping_values[[i]], device = "png", width=3.5, height = 4, units=c("in"), dpi=200) 
-  }
-}
-
-```
 
 ```{r export all tables}
 
@@ -849,9 +887,20 @@ for(i in 1:length(GLOBAL_OPERATING_STATS)){
   GOS_summary[[i]]$gos_mean_std <- temp_df
 }
 
-write.csv(GOS_summary$feature$gos_mean_std[grep("_1",GOS_summary$feature$gos_mean_std$method),], "temp_simul_result_table.csv")
+for(i in 1:length(GOS_summary)){
+  filename <- paste(tables_dir, "global_operating_stats_summary__", names(GOS_summary)[i],".csv", sep="")
+  write.csv(GOS_summary[[i]]$gos_mean_std, file = filename)
+  filename <- paste(tables_dir, "global_operating_stats_summary_2only__", names(GOS_summary)[i],".csv", sep="")
+  write.csv(GOS_summary[[i]]$gos_mean_std[grep("_2",GOS_summary[[i]]$gos_mean_std$method),], file = filename)
+}
 
 
+for(i in 1:length(aucpr_list)){
+  filename <- paste(tables_dir, "aucpr_", names(aucpr_list)[i],".csv", sep="")
+  write.csv(aucpr_list[[i]]$aucpr_df, file = filename)
+  filename <- paste(tables_dir, "aucpr_2_only_", names(GOS_summary)[i],".csv", sep="")
+  write.csv(aucpr_list[[i]]$aucpr_df[grep("_2",aucpr_list[[i]]$aucpr_df$method),], file = filename)
+}
 
 ```
 

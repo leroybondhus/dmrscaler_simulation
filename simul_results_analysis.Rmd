@@ -26,6 +26,58 @@ figures_dir <- "./results/figures/"
 tables_dir <- "./results/tables/"
 ```
 
+```{r create timing plots}
+filenames <- list.files(path = "./results/simuls/", pattern = "*TIME.csv", full.names = T)
+
+simul_times <- data.frame("method"=character(),"simul_id"=numeric(),"time"=numeric())
+
+for(simul_id in 1:length(simul_constructor_list)){
+  for(method_id in 1:length(method_set_list)){
+    filename <- filenames[grep(paste("simul_set_",simul_id,
+                                     "__method_set_",method_id,
+                                     sep=""), filenames)]
+    temp <- fread(filename)
+    simul_times <- rbind(simul_times,
+                         data.frame(method=names(method_set_list)[method_id],
+                                    simul_id=simul_id,
+                                    time=temp$time))
+  }
+}
+
+gg <- ggplot(simul_times[grep("_2",simul_times$method),], aes(y=method, x=log10(time)))+
+  ggtitle("method runtimes")+
+  xlab("runtime: log10(seconds)")+
+  geom_point()+
+  geom_point()+
+  geom_boxplot()+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=12),
+    strip.text = element_text(face="bold", size=12, angle=0),
+    axis.text = element_text(face="bold", size=12)
+  )
+gg
+
+
+filename <- paste(figures_dir, "method_runtimes.png",sep = "") 
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 5.5,
+  height = 2.3,
+  units = c("in"),
+  dpi = 320
+)
+  
+
+```
+
 ```{r add granges for locs and simulated dmrs}
 locs_gr <- GRanges(seqnames=locs$chr, ranges = IRanges(start=locs$pos, width=1))
 

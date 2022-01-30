@@ -44,6 +44,8 @@ for(simul_id in 1:length(simul_constructor_list)){
   }
 }
 
+simul_times$method <- factor(simul_times$method, levels = rev(levels(as.factor(simul_times$method) )))
+
 gg <- ggplot(simul_times[grep("_2",simul_times$method),], aes(y=method, x=log10(time)))+
   ggtitle("method runtimes")+
   xlab("runtime: log10(seconds)")+
@@ -69,8 +71,8 @@ ggsave(
   device = "png",
   path = NULL,
   scale = 1,
-  width = 5.5,
-  height = 2.3,
+  width = 6.2,
+  height = 2,
   units = c("in"),
   dpi = 320
 )
@@ -547,7 +549,7 @@ for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
     device = "png",
     path = NULL,
     scale = 1,
-    width = ifelse(grepl("partition_by_method",filename), 3,6),
+    width = ifelse(grepl("partition_by_method",filename), 2.5,6),
     height = 6,
     units = c("in"),
     dpi = ifelse(grepl("partition_by_method",filename), 320,230)
@@ -661,7 +663,7 @@ for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
     device = "png",
     path = NULL,
     scale = 1,
-    width = ifelse(grepl("partition_by_method",filename), 3,6),
+    width = ifelse(grepl("partition_by_method",filename), 2,6),
     height = 6,
     units = c("in"),
     dpi = ifelse(grepl("partition_by_method",filename), 320,230)
@@ -825,9 +827,11 @@ for(i in 1:length(os_summary)){
   
   which <- which(os_summary[[i]]$delta_beta == 0.2 &
                os_summary[[i]]$noise == 0.5 )
-  title <- paste("p_r_partition_by_method__",names(os_summary)[i] , sep="")
+  title <- paste("p_r_all_methods__",names(os_summary)[i] , sep="")
   gg <- ggplot(os_summary[[i]][which,], aes(x=Recall, y=Precision))+
     geom_path(aes(linetype=method, color=method), size=0.8) +
+    xlim(c(0,1))+
+    ylim(c(0,1))+
     theme_bw()+
     theme(
       plot.background = element_blank(),
@@ -841,10 +845,38 @@ for(i in 1:length(os_summary)){
   plot(gg)
   GGPLOT_LIST$P_R[[title]] <- gg
   
+  
+  which <- which(os_summary[[i]]$delta_beta == 0.2 &
+               os_summary[[i]]$noise == 0.5 &
+                 grepl("_2", os_summary[[i]]$method) )
+  title <- paste("p_r_methods_2__",names(os_summary)[i] , sep="")
+  gg <- ggplot(os_summary[[i]][which,], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method), size=0.8) +
+    scale_linetype_manual(values=c("longdash", "dotted", "solid", "dotdash"))+
+    xlim(c(0,1))+
+    ylim(c(0,1))+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0)
+    )
+    ggtitle(title)
+  plot(gg)
+  GGPLOT_LIST$P_R[[title]] <- gg
+  
+  
+  which <- grep("_2", os_summary[[i]]$method)
   title <- paste("p_r_delta_beta_noise__",names(os_summary)[i] , sep="")
-  gg <- ggplot(os_summary[[i]], aes(x=Recall, y=Precision))+
-    geom_path(aes(linetype=method, color=method), size=0.8) +
+  gg <- ggplot(os_summary[[i]][which,], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method), size=0.8) +
     facet_grid( delta_beta ~ noise,  labeller = label_both)+
+    scale_linetype_manual(values=c("longdash", "dotted", "solid", "dotdash"))+
+    xlim(c(0,1))+
+    ylim(c(0,1))+
     theme_bw()+
     theme(
       plot.background = element_blank(),
@@ -867,10 +899,10 @@ for(i in 1:length(GGPLOT_LIST$P_R)){
     device = "png",
     path = NULL,
     scale = 1,
-    width = ifelse(grepl("partition_by_method",filename), 5,8),
-    height = ifelse(grepl("partition_by_method",filename), 3,7),
+    width = ifelse(grepl("method",filename), 4.7,8),
+    height = ifelse(grepl("method",filename), 3,7),
     units = c("in"),
-    dpi = ifelse(grepl("partition_by_method",filename), 320,230)
+    dpi = ifelse(grepl("method",filename), 320,230)
   )
 }
 

@@ -948,6 +948,23 @@ for(i in 1:length(OPERATING_STATS)){
 GLOBAL_OPERATING_STATS
 ## summary table for main
 
+
+for(i in 1:length(GLOBAL_OPERATING_STATS)){
+  export_gos <- GLOBAL_OPERATING_STATS[[i]]
+  export_gos$method <- gsub("bumphunter_2", "bumphunter:maxWidth=1Mb",export_gos$method)
+  export_gos$method <- gsub("combp_2", "comb-p:dist=1Mb,step=5kb",export_gos$method)
+  export_gos$method <- gsub("dmrcate_2", "DMRcate:lambda=1Mb,C=2000",export_gos$method)
+  export_gos$method <- gsub("dmrscaler_2", "DMRscaler:benj-yuk",export_gos$method)
+  export_gos$method <- gsub("bumphunter_1", "bumphunter:maxWidth=1Mb",export_gos$method)
+  export_gos$method <- gsub("combp_1", "comb-p:dist=1Mb,step=5kb",export_gos$method)
+  export_gos$method <- gsub("dmrcate_1", "DMRcate:lambda=1Mb,C=2000",export_gos$method)
+  export_gos$method <- gsub("dmrscaler_1", "DMRscaler:bonferroni",export_gos$method)
+  filename <- paste(tables_dir, "global_operating_stats_", names(GLOBAL_OPERATING_STATS)[i],".csv", sep="")
+  write.csv(export_gos, file = filename)
+}
+
+
+
 GOS_summary <- list()
 for(i in 1:length(GLOBAL_OPERATING_STATS)){
   GOS_summary[[ names(GLOBAL_OPERATING_STATS)[i] ]] <- list()
@@ -1024,4 +1041,54 @@ for(i in 1:length(GOS_summary)){
 ```
 
 
+```{r simul cpg count v simul width}
 
+simul_width_v_cpg_count <- data.frame(simul_width=numeric(), cpg_count=numeric())
+for(i in 1:length(simul_constructor_list)){
+  simul <- simul_constructor_list[[i]]
+  simul_grs <- simul$grange
+  simul_grs$cpg_count <- countOverlaps(simul_grs, locs_gr )
+  simul_width_v_cpg_count <- rbind(simul_width_v_cpg_count,
+                                   data.frame(simul_width = width(simul_grs),
+                                              cpg_count = simul_grs$cpg_count) )
+  
+}
+
+gg <- ggplot(simul_width_v_cpg_count, aes(x=log10(simul_width), y=log2(cpg_count))) +
+  xlab("log10( Simulated DMR Width )")+
+  ylab("log2( CpG Probe Count in DMR )")+
+  
+  geom_bin_2d(alpha=0.8)+
+  geom_point(size=0.3, alpha=0.5,color="white")+
+  #scale_fill_gradient(low="grey70", high="grey20")+
+  scale_fill_continuous(type = "viridis")+
+  scale_y_continuous( breaks = seq(0,10,1))+
+  scale_x_continuous( breaks = seq(0,10,1)) +
+  stat_regline_equation(label.x=2, label.y=10) +
+  stat_cor(aes(label=..rr.label..), label.x=2, label.y=9.5)+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=12),
+    strip.text = element_text(face="bold", size=12, angle=0),
+    axis.text = element_text(face="bold", size=12, angle=0),
+    legend.position = "none"
+  )+ 
+  geom_smooth(method='lm', formula= y~x, color="red") 
+gg
+
+filename <- paste(figures_dir,"simul_width_v_num_cgs.png",sep = "") 
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 7,
+  height = 5,
+  units = c("in"),
+  dpi = 250
+)
+```

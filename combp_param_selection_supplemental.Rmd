@@ -33,8 +33,8 @@ library(ggplot2)
 library(gridExtra)
 
 library(DMRcate)
-document("/home/leroy/Desktop/PROJECTS/dmrscaler")
-install("/home/leroy/Desktop/PROJECTS/dmrscaler", quick = T)
+document("/home/leroy/Desktop/PROJECTS/DMRscaler")
+install("/home/leroy/Desktop/PROJECTS/DMRscaler", quick = T)
 
 results_dir <-paste("/home/leroy/Desktop/PROJECTS/dmrscaler_simulation/results_2/")
 ```

@@ -285,7 +285,8 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
     temp_colnames <- c("method","delta_beta","noise","rep",
                      "P", "N", "Called_P", "Called_N", ## positive count, negative count
                      "TP_called", "TP_simul",
-                     "TN_called" ,"TN_simul"  
+                     "TN_called" ,"TN_simul",
+                     "CG_PROP_DIFF"
                      )
     OP_STATS <- list()
     OP_STATS[["feature"]] <- data.frame(matrix(NA, nrow=1,
@@ -309,8 +310,11 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
     
     called_grs <- simul_results[[i]]$grange
     simul_grs <- simul$grange
+    simul_cg_grs <- GRanges(seqnames=simul$dmr_locs$chr, IRanges(start=simul$dmr_locs$pos, width=1))
     ### need to set a cutoff to region p-value for TP,FP, FN, etc
     called_grs <- called_grs[which(called_grs$pval_region < 0.05)]
+    
+    
     
     for(j in 1:length(OP_STATS)){
       op_stat_type <- names(OP_STATS)
@@ -343,14 +347,20 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
       OP_STATS$feature$Called_N <- length(called_inverse_grs)
       OP_STATS$feature$TN_called <- length(called_inverse_grs)
       OP_STATS$feature$TN_simul <- length(simul_inverse_grs)
+      OP_STATS$feature$CG_PROP_DIFF <- NA
+      
       OP_STATS$basepair$P <- sum(simul_grs@ranges@width)
       OP_STATS$basepair$N <- sum(simul_inverse_grs@ranges@width)
       OP_STATS$basepair$TN_called <- sum(called_inverse_grs@ranges@width)
       OP_STATS$basepair$TN_simul <- sum(simul_inverse_grs@ranges@width)
+      OP_STATS$basepair$CG_PROP_DIFF <- NA
+      
       OP_STATS$cpg_probe$P <- sum( countOverlaps(simul_grs, locs_gr) )
       OP_STATS$cpg_probe$N <- sum( countOverlaps(simul_inverse_grs, locs_gr) )
       OP_STATS$cpg_probe$TN_called <- sum( countOverlaps(called_inverse_grs, locs_gr) )
       OP_STATS$cpg_probe$TN_simul <- sum( countOverlaps(simul_inverse_grs, locs_gr) )
+      OP_STATS$cpg_probe$CG_PROP_DIFF <- NA
+      
     }else{
       simul_grs$TP <- -1
       for(j in 1:length(simul_grs)){
@@ -387,6 +397,7 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
       OP_STATS$feature$TP_simul <- mean(simul_grs$TP)*length(simul_grs)
       OP_STATS$feature$TN_called <- mean(called_inverse_grs$TP)*length(called_inverse_grs)
       OP_STATS$feature$TN_simul <- mean(simul_inverse_grs$TP)*length(simul_inverse_grs)
+      OP_STATS$feature$CG_PROP_DIFF <- mean(countOverlaps(called_grs,simul_cg_grs)/countOverlaps(called_grs,locs_gr))
       ## end: feature operating characteristics
       ## start: basepair operating characteristics
       OP_STATS$basepair$P <- sum(simul_grs@ranges@width) 
@@ -397,6 +408,7 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
       OP_STATS$basepair$TP_simul <- sum(simul_grs$TP * simul_grs@ranges@width)
       OP_STATS$basepair$TN_called <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
       OP_STATS$basepair$TN_simul <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
+      OP_STATS$basepair$CG_PROP_DIFF <- sum(countOverlaps(called_grs,simul_cg_grs))/sum(countOverlaps(called_grs,locs_gr))
       ## end: basepair operating characteristics
       ## start: cpg_probe operating characteristics
       OP_STATS$cpg_probe$P <- sum( countOverlaps(simul_grs, locs_gr) ) 
@@ -410,6 +422,7 @@ if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
                                              length(findOverlaps(locs_gr, cs_inverse_intersect)@from))
       OP_STATS$cpg_probe$TN_simul <- (OP_STATS$cpg_probe$N - 
                                              length(findOverlaps(locs_gr, cs_inverse_intersect)@from))
+      OP_STATS$cpg_probe$CG_PROP_DIFF <- sum(countOverlaps(called_grs,simul_cg_grs))/sum(countOverlaps(called_grs,locs_gr))
     }
     write.csv(paste(simul_id, method_id, sep = ","),
               file=paste("temp_simul_method",simul_id, method_id,".csv",sep = "_") )

@@ -1,0 +1,1059 @@
+---
+title: "simul_results_analysis__ttest"
+author: "Leroy Bondhus"
+date: "4/15/2022"
+output: html_document
+---
+
+```{r}
+library(IRanges)
+library(GenomicRanges)
+library(data.table)
+library(stringr)
+library(foreach)
+library(doParallel)
+registerDoParallel(detectCores()-2)
+library(ggplot2)
+library(ggExtra)
+library(scales)
+library(MESS)
+```
+
+```{r}
+load("locs.Rdata")
+
+load("ttest_method_set_list.Rdata")
+load("ttest_simul_constructor_list.Rdata")
+# load("method_set_list.Rdata")
+# load("simul_constructor_list.Rdata")
+
+figures_dir <- "./results/figures/"
+tables_dir <- "./results/tables/"
+```
+
+```{r add granges for locs and simulated dmrs}
+locs_gr <- GRanges(seqnames=locs$chr, ranges = IRanges(start=locs$pos, width=1))
+
+chr_seqlengths <- numeric(length=length(unique(locs$chr)))
+names(chr_seqlengths) <- unique(locs$chr)
+for(chr in unique(locs$chr)){
+  chr_seqlengths[chr] <- max(locs$pos[which(locs$chr==chr)])+1
+}
+chr_seqinfo <- Seqinfo(names(chr_seqlengths), seqlengths = chr_seqlengths)
+
+for(i in 1:length(simul_constructor_list)){
+  simul <- simul_constructor_list[[i]]
+  dmr_ids <- unique(simul$dmr_locs$dmr_name)
+  temp <- data.frame(chr=character(length = length(dmr_ids)),
+                     start=numeric(length = length(dmr_ids)),
+                     end=numeric(length = length(dmr_ids)),
+                     names=character(length = length(dmr_ids)))
+  for(j in 1:length(dmr_ids)){
+    which <- which(simul$dmr_locs$dmr_name==dmr_ids[j])
+    temp$chr[j] <- as.character(unique(simul$dmr_locs$chr[which]))
+    temp$start[j] <- min(simul$dmr_locs$pos[which])
+    temp$end[j] <- max(simul$dmr_locs$pos[which])
+    temp$names[j] <- dmr_ids[j]
+  }
+  
+  simul_constructor_list[[i]]$grange <- GRanges(seqnames = temp$chr,
+                                                ranges = IRanges(start=temp$start,
+                                                                 end=temp$end,
+                                                                 names=temp$names),
+                                                strand = rep("*",nrow(temp)),
+                                                seqinfo = chr_seqinfo)
+}
+
+```
+
+```{r add granges for called dmrs}
+filenames <- list.files(path = "./results/ttest_out", pattern = "*result.csv", full.names = T)
+
+simul_results <- list()
+
+for(simul_id in 21:30){
+  for(method_id in 1){
+    filename <- filenames[grep(paste("simul_set_",simul_id,
+                                     "__method_set_",method_id,
+                                     sep=""), filenames)]
+#    if(length(filename)==0){next}
+    result <- fread(filename)
+    if(method_set_list[[method_id]]$method=="dmrscaler"){
+      result <- result[grep("64",result$layer),]
+    }
+    simul_results[[basename(filename)]]$grange <- GRanges(
+      seqnames = result$chr,
+      ranges = IRanges(start = result$start,
+                       end = result$stop,
+                       pval_region = result$pval_region),
+      strand = rep("*",nrow(result)),
+      seqinfo = chr_seqinfo
+    )
+    ### need to set a cutoff to region p-value for TP,FP, FN, etc
+    which <- which(simul_results[[basename(filename)]]$grange$pval_region < 0.05)
+    simul_results[[basename(filename)]]$grange <- simul_results[[basename(filename)]]$grange[which]
+  }
+}
+
+```
+
+```{r width_pair setup}
+WIDTH_PAIRS <- data.frame("method"=character(),
+                          "delta_beta"=numeric(),
+                          "noise"=numeric(),
+                          "rep"=numeric(),
+                          "simulated_width"=numeric(),
+                          "called_width"=numeric())
+
+for(i in 1:length(simul_results)){
+  simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                   "simul_set_([0-9]*)")[2])
+  simul <- simul_constructor_list[[simul_id]]
+  method_id <- as.numeric(str_match(names(simul_results)[i],
+                                    "method_set_([0-9]*)")[2])
+  called_grs <- simul_results[[i]]$grange
+  simul_grs <- simul$grange
+  overlaps <- findOverlaps(simul_grs, called_grs)
+  
+  temp_sw <- simul_grs@ranges@width[overlaps@from]
+  if(length(temp_sw)==0){temp_sw <- NA}
+  temp_cw <- called_grs@ranges@width[overlaps@to]
+  if(length(temp_cw)==0){temp_cw <- NA}
+  temp_df <- data.frame("method" = names(method_set_list)[method_id],
+                        "delta_beta" = simul$pars$delta_beta,
+                        "noise" = simul$pars$noise,
+                        "rep" = simul$pars$rep,
+                        "simulated_width" = temp_sw,
+                        "called_width" = temp_cw
+                        )
+  WIDTH_PAIRS <- rbind(WIDTH_PAIRS, temp_df)
+}
+
+```
+
+```{r mapping_value setup}
+MAPPING_VALUES <- data.frame("method"=character(),
+                          "delta_beta"=numeric(),
+                          "noise"=numeric(),
+                          "rep"=numeric(),
+                          "mapping_value"=numeric())
+
+for(i in 1:length(simul_results)){
+  simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                   "simul_set_([0-9]*)")[2])
+  simul <- simul_constructor_list[[simul_id]]
+  method_id <- as.numeric(str_match(names(simul_results)[i],
+                                    "method_set_([0-9]*)")[2])
+  called_grs <- simul_results[[i]]$grange
+  simul_grs <- simul$grange
+  
+  overlaps <- findOverlaps(simul_grs, called_grs)
+  overlaps_count_simul <- countOverlaps( simul_grs, called_grs)
+  overlaps_count_called <- countOverlaps( called_grs, simul_grs)
+  
+  count_called_per_simul <- numeric(length = length(simul_grs) )
+  
+  for(j in 1:length(simul_grs)){
+    if(!is.element(j, overlaps@from)){ count_called_per_simul[j] <- 0; next;}
+    which <- overlaps@to[which(overlaps@from==j)] 
+    max_overlapping_those_called_over_sim <-max(overlaps_count_called[which])
+    if(overlaps_count_simul[j] >= max_overlapping_those_called_over_sim){
+      count_called_per_simul[j] <- overlaps_count_simul[j]
+    } else { count_called_per_simul[j] <- 1/max_overlapping_those_called_over_sim}
+  }
+  
+  
+  temp_df <- data.frame("method" = names(method_set_list)[method_id],
+                        "delta_beta" = simul$pars$delta_beta,
+                        "noise" = simul$pars$noise,
+                        "rep" = simul$pars$rep,
+                        "mapping_value" = count_called_per_simul )
+  MAPPING_VALUES <- rbind(MAPPING_VALUES, temp_df)
+}
+
+```
+
+```{r called_results setup}
+
+CALLED_RESULTS <- data.frame("method"=character(),
+                          "delta_beta"=numeric(),
+                          "noise"=numeric(),
+                          "rep"=numeric(),
+                          "TP"=numeric(),
+                          "pval"=numeric())
+
+CALLED_RESULTS <- foreach(i = 1:length(simul_results),
+                        .combine = rbind,
+                        .errorhandling = "pass" ) %dopar% {
+  simul_id <- as.numeric(stringr::str_match(names(simul_results)[i],
+                                   "simul_set_([0-9]*)")[2])
+  simul <- simul_constructor_list[[simul_id]]
+  method_id <- as.numeric(stringr::str_match(names(simul_results)[i],
+                                    "method_set_([0-9]*)")[2])
+  called_grs <- simul_results[[i]]$grange
+  simul_grs <- simul$grange
+  temp_df <- data.frame("method" = names(method_set_list)[method_id],
+                        "delta_beta" = simul$pars$delta_beta,
+                        "noise" = simul$pars$noise,
+                        "rep" = simul$pars$rep)
+  if(length(called_grs)==0){
+    temp_df <- cbind(temp_df, data.frame( "pval" = NA, 
+                                          "chr" = NA,
+                                          "start" = NA,
+                                          "end" = NA))
+  } else {
+    temp_df <- cbind(temp_df, data.frame( "pval" = called_grs$pval_region, 
+                                          "chr" = as.character(seqnames(called_grs)),
+                                          "start" = start(called_grs),
+                                          "end" = end(called_grs)))
+  }
+
+  
+  temp_df
+}
+
+```
+
+
+```{r global_operating_statistics setup}
+### want to measures and record global stats used in benchmark Mallik et al 2018
+### create  table or supp table to report
+### TP, FP, FN, Power, Precision, AuPR, MCC, F1, Time
+
+### plots to make Precision-Recall,
+###               Power-FDR,
+###               Precision-Delta_Beta, Power-Delta_Beta
+###               Precision-Noise, Power-Noise
+###NOTE this foreach takes ~30-60 min on 12 cores-  save output and load instead of rerunning
+if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
+  load("GLOBAL_OPERATING_STATS.Rdata")
+} else{
+  temp_comb <- function(x, ...){
+    mapply(rbind,x,...,SIMPLIFY = FALSE)
+  }
+  GLOBAL_OPERATING_STATS <- foreach(i = 1:length(simul_results),
+                             .combine = 'temp_comb',
+                             .errorhandling = "pass" ) %dopar% {
+    temp_colnames <- c("method","delta_beta","noise","rep",
+                     "P", "N", "Called_P", "Called_N", ## positive count, negative count
+                     "TP_called", "TP_simul",
+                     "TN_called" ,"TN_simul",
+                     "CG_PROP_DIFF"
+                     )
+    OP_STATS <- list()
+    OP_STATS[["feature"]] <- data.frame(matrix(NA, nrow=1,
+                                       ncol=length(temp_colnames)) )
+    OP_STATS[["basepair"]] <- data.frame(matrix(NA, nrow=1,
+                                       ncol=length(temp_colnames)) )
+    OP_STATS[["cpg_probe"]] <- data.frame(matrix(NA, nrow=1,
+                                       ncol=length(temp_colnames)) )
+  
+    colnames(OP_STATS[["feature"]]) <- temp_colnames
+    colnames(OP_STATS[["basepair"]]) <- temp_colnames
+    colnames(OP_STATS[["cpg_probe"]]) <- temp_colnames
+    
+    
+    
+    simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                     "simul_set_([0-9]*)")[2])
+    simul <- simul_constructor_list[[simul_id]]
+    method_id <- as.numeric(str_match(names(simul_results)[i],
+                                      "method_set_([0-9]*)")[2])
+    
+    called_grs <- simul_results[[i]]$grange
+    simul_grs <- simul$grange
+    simul_cg_grs <- GRanges(seqnames=simul$dmr_locs$chr, IRanges(start=simul$dmr_locs$pos, width=1))
+    ### need to set a cutoff to region p-value for TP,FP, FN, etc
+    called_grs <- called_grs[which(called_grs$pval_region < 0.05)]
+    
+    
+    
+    for(j in 1:length(OP_STATS)){
+      op_stat_type <- names(OP_STATS)
+      OP_STATS[[j]]$method <-names(method_set_list)[method_id]
+      OP_STATS[[j]]$delta_beta <- simul$pars$delta_beta
+      OP_STATS[[j]]$noise <- simul$pars$noise
+      OP_STATS[[j]]$rep <- simul$pars$rep
+    }
+    
+    ## start : add TP rate to grs features ###
+    cs_intersect <-  intersect( called_grs, simul_grs)
+    cs_overlap <-  findOverlaps( called_grs, simul_grs)
+    called_inverse_grs <- gaps(called_grs)
+    called_inverse_grs <- called_inverse_grs[which(as.character(strand(called_inverse_grs))=="*" )]
+    simul_inverse_grs <- gaps(simul_grs)
+    simul_inverse_grs <- simul_inverse_grs[which(as.character(strand(simul_inverse_grs))=="*" )]
+    cs_inverse_intersect <-  intersect( called_grs, simul_inverse_grs)
+    cs_inverse_overlap <-  findOverlaps( called_grs, simul_inverse_grs)
+    c_inverse_s_inverse_intersect <-  intersect( called_inverse_grs, simul_inverse_grs)
+    c_inverse_s_inverse_overlap <-  findOverlaps( called_inverse_grs, simul_inverse_grs) 
+    
+    if(length(called_grs)==0){
+      for(j in 1:length(OP_STATS)){
+        OP_STATS[[j]]$TP_called <- 0
+        OP_STATS[[j]]$TP_simul <- 0
+        OP_STATS[[j]]$Called_P <- 0
+      }
+      OP_STATS$feature$P <- length(simul_grs)
+      OP_STATS$feature$N <- length(simul_inverse_grs)
+      OP_STATS$feature$Called_N <- length(called_inverse_grs)
+      OP_STATS$feature$TN_called <- length(called_inverse_grs)
+      OP_STATS$feature$TN_simul <- length(simul_inverse_grs)
+      OP_STATS$feature$CG_PROP_DIFF <- NA
+      
+      OP_STATS$basepair$P <- sum(simul_grs@ranges@width)
+      OP_STATS$basepair$N <- sum(simul_inverse_grs@ranges@width)
+      OP_STATS$basepair$TN_called <- sum(called_inverse_grs@ranges@width)
+      OP_STATS$basepair$TN_simul <- sum(simul_inverse_grs@ranges@width)
+      OP_STATS$basepair$CG_PROP_DIFF <- NA
+      
+      OP_STATS$cpg_probe$P <- sum( countOverlaps(simul_grs, locs_gr) )
+      OP_STATS$cpg_probe$N <- sum( countOverlaps(simul_inverse_grs, locs_gr) )
+      OP_STATS$cpg_probe$TN_called <- sum( countOverlaps(called_inverse_grs, locs_gr) )
+      OP_STATS$cpg_probe$TN_simul <- sum( countOverlaps(simul_inverse_grs, locs_gr) )
+      OP_STATS$cpg_probe$CG_PROP_DIFF <- NA
+      
+    }else{
+      simul_grs$TP <- -1
+      for(j in 1:length(simul_grs)){
+        if(!is.element(j, cs_overlap@to)){ simul_grs[j]$TP <- 0; next;}
+        temp_gr <- intersect(cs_intersect, simul_grs[j])
+        simul_grs[j]$TP <- sum(temp_gr@ranges@width) / simul_grs[j]@ranges@width 
+      }
+      simul_inverse_grs$TP <- -1
+      for(j in 1:length(simul_inverse_grs)){
+        if(!is.element(j, cs_inverse_overlap@to)){ simul_inverse_grs[j]$TP <- 1; next;}
+        temp_gr <- intersect(cs_inverse_intersect, simul_inverse_grs[j])
+        simul_inverse_grs[j]$TP <- 1-(sum(temp_gr@ranges@width) / simul_inverse_grs[j]@ranges@width)
+      }
+      called_grs$TP <- -1
+      for(j in 1:length(called_grs)){
+        if(!is.element(j, cs_overlap@from)){ called_grs[j]$TP <- 0; next;}
+        temp_gr <- intersect(cs_intersect, called_grs[j])
+        called_grs[j]$TP <- sum(temp_gr@ranges@width) / called_grs[j]@ranges@width 
+      }
+      called_inverse_grs$TP <- -1
+      for(j in 1:length(called_inverse_grs)){
+        if(!is.element(j, c_inverse_s_inverse_overlap@from)){ called_inverse_grs[j]$TP <- 0; next;}
+        temp_gr <- intersect(c_inverse_s_inverse_intersect, called_inverse_grs[j])
+        called_inverse_grs[j]$TP <- sum(temp_gr@ranges@width) / called_inverse_grs[j]@ranges@width 
+      }
+      ## end : add TP rate to grs features ###
+      
+      ## start: feature operating characteristics
+      OP_STATS$feature$P <- length(simul_grs) 
+      OP_STATS$feature$N <- length(simul_inverse_grs)
+      OP_STATS$feature$Called_P <- length(called_grs)
+      OP_STATS$feature$Called_N <- length(called_inverse_grs)
+      OP_STATS$feature$TP_called <- mean(called_grs$TP)*length(called_grs)
+      OP_STATS$feature$TP_simul <- mean(simul_grs$TP)*length(simul_grs)
+      OP_STATS$feature$TN_called <- mean(called_inverse_grs$TP)*length(called_inverse_grs)
+      OP_STATS$feature$TN_simul <- mean(simul_inverse_grs$TP)*length(simul_inverse_grs)
+      OP_STATS$feature$CG_PROP_DIFF <- mean(countOverlaps(called_grs,simul_cg_grs)/countOverlaps(called_grs,locs_gr))
+      ## end: feature operating characteristics
+      ## start: basepair operating characteristics
+      OP_STATS$basepair$P <- sum(simul_grs@ranges@width) 
+      OP_STATS$basepair$N <- sum(simul_inverse_grs@ranges@width)
+      OP_STATS$basepair$Called_P <- sum(called_grs@ranges@width)
+      OP_STATS$basepair$Called_N <- sum(called_inverse_grs@ranges@width)
+      OP_STATS$basepair$TP_called <- sum(called_grs$TP * called_grs@ranges@width)
+      OP_STATS$basepair$TP_simul <- sum(simul_grs$TP * simul_grs@ranges@width)
+      OP_STATS$basepair$TN_called <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
+      OP_STATS$basepair$TN_simul <- sum(simul_inverse_grs@ranges@width) - sum(cs_inverse_intersect@ranges@width)
+      OP_STATS$basepair$CG_PROP_DIFF <- sum(countOverlaps(called_grs,simul_cg_grs))/sum(countOverlaps(called_grs,locs_gr))
+      ## end: basepair operating characteristics
+      ## start: cpg_probe operating characteristics
+      OP_STATS$cpg_probe$P <- sum( countOverlaps(simul_grs, locs_gr) ) 
+      OP_STATS$cpg_probe$N <- sum( countOverlaps(simul_inverse_grs, locs_gr) )
+      OP_STATS$cpg_probe$Called_P <- sum( countOverlaps(called_grs, locs_gr) )
+      OP_STATS$cpg_probe$Called_N <- sum( countOverlaps(called_inverse_grs, locs_gr) )
+      OP_STATS$cpg_probe$TP_called <- length(findOverlaps(locs_gr, cs_intersect)@from)
+      OP_STATS$cpg_probe$TP_simul <- length(findOverlaps(locs_gr, cs_intersect)@from)
+      temp <- length(findOverlaps(locs_gr, cs_inverse_intersect)@from)  
+      OP_STATS$cpg_probe$TN_called <- (OP_STATS$cpg_probe$N - 
+                                             length(findOverlaps(locs_gr, cs_inverse_intersect)@from))
+      OP_STATS$cpg_probe$TN_simul <- (OP_STATS$cpg_probe$N - 
+                                             length(findOverlaps(locs_gr, cs_inverse_intersect)@from))
+      OP_STATS$cpg_probe$CG_PROP_DIFF <- sum(countOverlaps(called_grs,simul_cg_grs))/sum(countOverlaps(called_grs,locs_gr))
+    }
+    write.csv(paste(simul_id, method_id, sep = ","),
+              file=paste("temp_simul_method",simul_id, method_id,".csv",sep = "_") )
+    
+    OP_STATS
+    ## end: cpg_probe operating characteristics
+  }
+  save(GLOBAL_OPERATING_STATS, file="ttest_GLOBAL_OPERATING_STATS.Rdata")
+}
+
+for(i in 1:length(GLOBAL_OPERATING_STATS)){
+  temp <- GLOBAL_OPERATING_STATS[[i]]
+  temp$Precision <- temp$TP_called / temp$Called_P
+  temp$Recall <- temp$TP_simul / temp$P
+  temp$Specificity <- temp$TN_simul / temp$N
+  temp$FDR <- 1 - temp$Precision
+  temp$F1 <- (2 * temp$Precision *  temp$Recall) / (temp$Precision + temp$Recall)
+  temp$MCC <- sqrt(temp$Recall * temp$Specificity * temp$Precision * (temp$TN_called / temp$Called_N) ) -
+    sqrt( (1-temp$Recall) * (1-temp$Specificity) * (1-temp$Precision) * (1-(temp$TN_called / temp$Called_N)) )
+  GLOBAL_OPERATING_STATS[[i]] <- temp
+}
+#GLOBAL_OPERATING_STATS
+
+
+```
+
+```{r set up ggplot list}
+GGPLOT_LIST <- list()
+```
+
+```{r simul_v_called widths plots}
+
+GGPLOT_LIST$ggl_width_pairs <- list()
+
+which <- which(WIDTH_PAIRS$delta_beta == 0.2 &
+               WIDTH_PAIRS$noise == 0.5 )# &
+               #grepl("_2",WIDTH_PAIRS$method )) 
+
+dm_methods <- unique(WIDTH_PAIRS$method[which])
+labels <- character(length = length(dm_methods))
+names(labels)<-dm_methods
+for(i in 1:length(dm_methods)){
+  temp_which <- intersect(which, which(WIDTH_PAIRS$method == dm_methods[i]))
+  cor <- cor(log10(WIDTH_PAIRS$simulated_width[temp_which]), log10(WIDTH_PAIRS$called_width[temp_which]), use="complete")
+  labels[i] <- paste(dm_methods[i], " (Pearson's R = ", round(cor,2), ")", sep="")   #\n", unique(WIDTH_PAIRS$params[which]), sep = "" )
+  names(labels[i])<-dm_methods[i]
+}
+
+title <- "partition_by_method"
+xmin <- min(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+xmax <- max(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+ymin <- min(log10(WIDTH_PAIRS$called_width),na.rm = T)
+ymax <- max(log10(WIDTH_PAIRS$called_width),na.rm = T)
+gg <- ggplot(WIDTH_PAIRS[which,], aes(x=log10(simulated_width), y=log10(called_width))) +
+  ggtitle(title)+
+  xlab("log10( Simulated DMR Width )")+
+  ylab("log10( Called DMR Width )")+
+  geom_abline(slope = 1, intercept = 0,size=0.2,alpha=0.6)+
+  stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
+  geom_point(size=0.15, alpha=0.3)+
+  xlim(xmin,xmax)+
+  ylim(ymin,ymax)+
+  scale_fill_gradient(low="grey70", high="grey20")+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=8),
+    strip.text = element_text(face="bold", size=8, angle=0),
+    axis.text = element_text(face="bold", size=8, angle=0),
+    legend.position = "none"
+  ) + #facet_grid( method ~ .) + geom_text(data = gg_labels, aes(label=label), x=(xmax+xmin)/2, y=ymax-0.1, size=3)
+  facet_wrap(. ~ method, ncol = 1 , labeller=labeller(method = labels) )
+gg
+GGPLOT_LIST$ggl_width_pairs[[title]] <- gg
+
+
+
+
+### noise x delta_beta
+for(method_id in 1:length(unique(WIDTH_PAIRS$method))){
+  which <- which(WIDTH_PAIRS$method==unique(WIDTH_PAIRS$method)[method_id])
+  gg_labels <- merge(data.frame(delta_beta=unique(WIDTH_PAIRS$delta_beta[which])),
+                     data.frame(noise=unique(WIDTH_PAIRS$noise[which])))
+  gg_labels$simulated_width <- Inf
+  gg_labels$called_width <- Inf
+  gg_labels$label <- as.character(c(1:nrow(gg_labels)))
+  
+  for(delta_beta in unique(WIDTH_PAIRS$delta_beta[which])){
+    for(noise in unique(WIDTH_PAIRS$noise[which])){
+      temp_which <- intersect(which, which(WIDTH_PAIRS$delta_beta==delta_beta &
+                                             WIDTH_PAIRS$noise==noise))
+      temp_index <- which(gg_labels$delta_beta==delta_beta & gg_labels$noise==noise)
+      gg_labels$label[temp_index] <- paste("R = ",
+                                           round(cor(log10(WIDTH_PAIRS$simulated_width[temp_which]),
+                                                     log10(WIDTH_PAIRS$called_width[temp_which])),3 ),
+                                           sep = "")
+    }
+  }
+  title <- unique(WIDTH_PAIRS$method)[method_id]
+  xmin <- min(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+  xmax <- max(log10(WIDTH_PAIRS$simulated_width),na.rm = T)
+  ymin <- min(log10(WIDTH_PAIRS$called_width),na.rm = T)
+  ymax <- max(log10(WIDTH_PAIRS$called_width),na.rm = T)
+  gg <- ggplot(WIDTH_PAIRS[which,], aes(x=log10(simulated_width), y=log10(called_width))) +
+    ggtitle(title)+
+    xlab("log10( Simulated DMR Width )")+
+    ylab("log10( Called DMR Width )")+
+    geom_abline(slope = 1, intercept = 0,size=0.2,alpha=0.6)+
+    stat_density_2d(aes(fill= ..level..),geom = "polygon",  n=50, h=0.7, alpha=0.5) +
+    geom_point(size=0.3, alpha=0.3)+
+    xlim(xmin,xmax)+
+    ylim(ymin,ymax)+
+    scale_fill_gradient(low="grey70", high="grey20")+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0),
+      legend.position = "none"
+    ) + facet_grid( delta_beta ~ noise, labeller = label_both) + geom_text(data = gg_labels, aes(label=label), x=(xmax+xmin)/2, y=ymax-0.1, size=3)
+  GGPLOT_LIST$ggl_width_pairs[[title]] <- gg
+}
+
+
+
+for(i in 1:length(GGPLOT_LIST$ggl_width_pairs)){
+  plot(GGPLOT_LIST$ggl_width_pairs[[i]])
+  filename <- paste(figures_dir, "ttest_", names(GGPLOT_LIST$ggl_width_pairs)[i],"_called_width_v_simul_width.png",sep = "") 
+  ggsave(
+    filename=filename,
+    plot = GGPLOT_LIST$ggl_width_pairs[[i]],
+    device = "png",
+    path = NULL,
+    scale = 1,
+    width = ifelse(grepl("partition_by_method",filename), 2.5,6),
+    height = 6,
+    units = c("in"),
+    dpi = ifelse(grepl("partition_by_method",filename), 320,230)
+  )
+  
+}
+
+
+```
+
+```{r MAPPING VALUE Plots }
+simul_count <- 1000
+
+GGPLOT_LIST$ggl_mapping_values <- list()
+
+which <- which(MAPPING_VALUES$delta_beta == 0.2 &
+               MAPPING_VALUES$noise == 0.5 &
+               grepl("_2",MAPPING_VALUES$method ))
+
+p <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
+    geom_histogram(aes(y= stat(count)/simul_count), bins=50) +
+    facet_wrap( method ~ . , nrow=4)
+temp <- ggplot_build(p)
+dat <-  temp$data[[1]]
+dat$cumsum <- numeric(length(nrow(dat)))
+for(pan in unique(dat$PANEL)){
+  dat$cumsum[which(dat$PANEL==pan)] <- cumsum(dat$y[which(dat$PANEL==pan)])
+  dat$method[which(dat$PANEL==pan)] <- temp$layout$layout$method[which(temp$layout$layout$PANEL==pan)]
+  temp_dat <- dat[which(dat$PANEL==pan),][length(which(dat$PANEL==pan)),]
+  temp_dat$x <-  ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T))
+  dat <- rbind(dat, temp_dat)
+}
+
+title <- "partition_by_method"
+gg <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
+  ggtitle(title)+
+  geom_line(data = dat, aes(x=x,y=cumsum))+
+  geom_histogram(aes(y = stat(count) / simul_count ),color="black", fill="grey60", bins = 50)+
+  scale_y_continuous(labels = percent ) +
+  ylab("Percent of Simulated DMRs")+
+  scale_y_continuous(limits = c(0,1),
+                     breaks = seq(0,1,0.1))+
+  scale_x_continuous( breaks = seq(-4,4,0.5)) +
+  xlab("-log10(Mapping value) ")+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=8),
+    strip.text = element_text(face="bold", size=8, angle=0),
+    axis.text = element_text(face="bold", size=8, angle=0),
+    legend.position = "none")+
+  facet_wrap(method ~ . , nrow=4)
+GGPLOT_LIST$ggl_mapping_values[[title]] <- gg
+
+### noise x delta_beta
+for(method_id in 1:length(unique(MAPPING_VALUES$method))){
+  which <- which(MAPPING_VALUES$method==unique(MAPPING_VALUES$method)[method_id])
+  p <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
+      geom_histogram(aes(y= stat(count)/simul_count), bins=50) +
+      facet_grid( delta_beta ~ noise)
+  temp <- ggplot_build(p)
+  dat <-  temp$data[[1]]
+  dat$cumsum <- numeric(length(nrow(dat)))
+  for(pan in unique(dat$PANEL)){
+    dat$cumsum[which(dat$PANEL==pan)] <- cumsum(dat$y[which(dat$PANEL==pan)])
+    dat$delta_beta[which(dat$PANEL==pan)] <- temp$layout$layout$delta_beta[which(temp$layout$layout$PANEL==pan)]
+    dat$noise[which(dat$PANEL==pan)] <- temp$layout$layout$noise[which(temp$layout$layout$PANEL==pan)]
+    temp_dat <- dat[which(dat$PANEL==pan),][length(which(dat$PANEL==pan)),]
+    temp_dat$x <-  ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T))
+    dat <- rbind(dat, temp_dat)
+  }
+  
+  title <- unique(MAPPING_VALUES$method)[method_id]
+  gg <- ggplot(MAPPING_VALUES[which,], aes(x=log10(mapping_value)))+
+    ggtitle(title)+
+    geom_line(data = dat, aes(x=x,y=cumsum))+
+    geom_histogram(aes(y = stat(count) / simul_count ),color="black", fill="grey60", bins = 50)+
+    scale_y_continuous(labels = percent ) +
+    ylab("Percent of Simulated DMRs")+
+    scale_y_continuous(limits = c(0,1),
+                       breaks = seq(0,1,0.2))+
+    scale_x_continuous(limits = c(
+      floor(min(log10(MAPPING_VALUES$mapping_value)[!is.infinite(log10(MAPPING_VALUES$mapping_value))],na.rm = T)) ,
+      ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T)) ),
+   breaks = seq(
+     floor(min(log10(MAPPING_VALUES$mapping_value)[!is.infinite(log10(MAPPING_VALUES$mapping_value))],na.rm = T)) ,
+     ceiling(max(log10(MAPPING_VALUES$mapping_value),na.rm = T)),
+     1)) +
+    xlab("-log10(Mapping value) ")+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0),
+      legend.position = "none")+
+    facet_grid( delta_beta ~ noise,  labeller = label_both)
+  GGPLOT_LIST$ggl_mapping_values[[title]] <- gg
+}
+
+for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
+  plot(GGPLOT_LIST$ggl_mapping_values[[i]])
+  filename <- paste(figures_dir, names(GGPLOT_LIST$ggl_mapping_values)[i],"_mapping_value.png",sep = "") 
+  ggsave(
+    filename=filename,
+    plot = GGPLOT_LIST$ggl_mapping_values[[i]],
+    device = "png",
+    path = NULL,
+    scale = 1,
+    width = ifelse(grepl("partition_by_method",filename), 2,6),
+    height = 6,
+    units = c("in"),
+    dpi = ifelse(grepl("partition_by_method",filename), 320,230)
+  )
+  
+}
+
+
+```
+
+```{r precision-recall Plots}
+## precision = TP / (TP+FP)
+## recall = TP/(TP+FN)
+## fdr =  FP/(TP+FP)
+## power = TP/(TP+FN)
+
+temp_comb <- function(x, ...){
+    mapply(rbind,x,...,SIMPLIFY = FALSE)
+}
+if(file.exists("OPERATING_STATS.Rdata")){
+  load("OPERATING_STATS.Rdata")
+} else{
+  OPERATING_STATS <- foreach(i = 1:length(simul_results),
+                             .combine = 'temp_comb',
+                             .errorhandling = "pass" ) %dopar% {
+                               
+      simul_id <- as.numeric(str_match(names(simul_results)[i],
+                                       "simul_set_([0-9]*)")[2])
+      simul <- simul_constructor_list[[simul_id]]
+      method_id <- as.numeric(str_match(names(simul_results)[i],
+                                        "method_set_([0-9]*)")[2])
+      
+      called_grs <- simul_results[[i]]$grange
+      simul_grs <- simul$grange
+      ### need to set a cutoff to region p-value for TP,FP, FN, etc
+      called_grs <- called_grs[which(called_grs$pval_region < 0.05)]
+      ## order called_grs
+      called_grs <- called_grs[order(called_grs$pval_region)]
+      called_grs$TP <- -1 ##
+      cs_overlap <-  findOverlaps( called_grs, simul_grs)
+      for(j in 1:length(called_grs)){
+        if(!is.element(j, cs_overlap@from)){ called_grs$TP[j] <- 0;  next;}
+        temp_intersect <- intersect(simul_grs,called_grs[j] )  
+        called_grs$TP[j] <- sum(temp_intersect@ranges@width) / called_grs[j]@ranges@width
+      }
+    
+      temp_seq <- floor(seq(from=1,to=length(called_grs),
+                            length.out = min(length(called_grs),50)))
+      temp_colnames <- c("method","delta_beta","noise","rep",
+                         "Precision", "Recall", "FDR", "Power" )
+      temp_df <- data.frame(matrix(NA, nrow=length(temp_seq),
+                                       ncol=length(temp_colnames)) )
+      colnames(temp_df) <- temp_colnames
+      temp_df$method <- names(method_set_list)[method_id]
+      temp_df$delta_beta <- simul$pars$delta_beta
+      temp_df$noise <- simul$pars$noise
+      temp_df$rep <- simul$pars$rep
+      
+      OP_STATS <- list()
+      OP_STATS[["feature"]] <- temp_df
+      OP_STATS[["basepair"]] <- temp_df
+      OP_STATS[["cpg_probe"]] <- temp_df
+      
+      
+      for(j in 1:length(temp_seq)){
+        #print(j)
+        called_grs_sub <- called_grs[1:temp_seq[j]]
+        cs_overlap <-  findOverlaps( called_grs_sub, simul_grs)
+        simul_grs$TP <- 0
+        for(k in 1:length(simul_grs)){
+          if(!is.element(k, cs_overlap@to)){ simul_grs$TP[k] <- 0;  next;}
+          temp_intersect <- intersect(simul_grs[k], called_grs_sub )
+          simul_grs$TP[k] <- sum(temp_intersect@ranges@width) / simul_grs[k]@ranges@width 
+        }
+        
+        ## RECORD OP_STATS HERE
+        ### feature
+        OP_STATS$feature$Precision[j] <- mean(called_grs_sub$TP)
+        OP_STATS$feature$Recall[j] <- mean(simul_grs$TP)
+        OP_STATS$feature$FDR[j] <- 1 - OP_STATS$feature$Precision[j]
+        OP_STATS$feature$Power[j] <- OP_STATS$feature$Recall[j]
+        ### basepair
+        OP_STATS$basepair$Precision[j] <- sum((width(called_grs_sub) * called_grs_sub$TP)) /
+          sum(width(called_grs_sub)) 
+        OP_STATS$basepair$Recall[j] <- sum((width(simul_grs) * simul_grs$TP )) /
+          sum(width(simul_grs))
+        OP_STATS$basepair$FDR[j] <- 1 - OP_STATS$basepair$Precision[j]
+        OP_STATS$basepair$Power[j] <- OP_STATS$basepair$Recall[j]
+        ### cpg_probe
+        cs_intersect <-  intersect( called_grs_sub, simul_grs)
+        OP_STATS$cpg_probe$Precision[j] <- length(intersect(cs_intersect,locs_gr)) /
+          length(intersect(called_grs_sub, locs_gr))
+        OP_STATS$cpg_probe$Recall[j] <- length(intersect(cs_intersect,locs_gr)) /
+          length(intersect(simul_grs, locs_gr))
+        OP_STATS$cpg_probe$FDR[j] <- 1 - OP_STATS$cpg_probe$Precision[j]
+        OP_STATS$cpg_probe$Power[j] <- OP_STATS$cpg_probe$Recall[j]
+  
+      }
+      write.csv(paste(simul_id, method_id, sep = ","),
+                file=paste("temp_opstat_simul_method",simul_id, method_id,".csv",sep = "_") )
+      OP_STATS
+      
+  }
+  
+  save(OPERATING_STATS, file="OPERATING_STATS.Rdata")
+}
+
+OPERATING_STATS
+
+ 
+for(i in 1:length(OPERATING_STATS)){
+  OPERATING_STATS[[i]]$db_method_noise_rep <- paste(OPERATING_STATS[[i]]$method,
+                                                    OPERATING_STATS[[i]]$delta_beta,
+                                                    OPERATING_STATS[[i]]$noise,
+                                                    OPERATING_STATS[[i]]$rep, sep="_")
+  OPERATING_STATS[[i]]$db_method_noise <- paste(OPERATING_STATS[[i]]$method,
+                                                    OPERATING_STATS[[i]]$delta_beta,
+                                                    OPERATING_STATS[[i]]$noise, sep="_")
+  OPERATING_STATS[[i]]$seq_id <- 0
+  for(j in unique(OPERATING_STATS[[i]]$db_method_noise_rep)){
+    which <- which(OPERATING_STATS[[i]]$db_method_noise_rep == j)
+    OPERATING_STATS[[i]]$seq_id[which] <- seq(1:length(which))
+    if(length(which)!=50){print(paste(j, length(which)))}
+  }
+  
+  OPERATING_STATS[[i]]$db_method_noise_seq_id <- paste(OPERATING_STATS[[i]]$method,
+                                                  OPERATING_STATS[[i]]$delta_beta,
+                                                  OPERATING_STATS[[i]]$noise,
+                                                  str_pad(OPERATING_STATS[[i]]$seq_id, 2, pad="0"), sep="_")
+
+}
+
+
+
+```
+
+
+```{r generate p-r and fdr-power curves}
+
+os_summary <- list()
+for(i in 1:length(OPERATING_STATS)){
+  os_summary[[ names(OPERATING_STATS)[i] ]] <- aggregate(
+    cbind(Precision, Recall, FDR, Power) ~ method + delta_beta + noise + seq_id + db_method_noise + db_method_noise_seq_id,
+    data=OPERATING_STATS[[i]], FUN=mean, na.rm=TRUE
+  )
+  
+  for(j in unique(os_summary[[i]]$db_method_noise)){
+    which <- which(os_summary[[i]]$db_method_noise == j)
+    which_max <- which.max(os_summary[[i]][which,]$seq_id)
+    temp_row <- os_summary[[i]][which,][which_max,]
+    temp_row$Precision <- 0
+    temp_row$FDR <- 1
+    temp_row$seq_id <- temp_row$seq_id+1
+    os_summary[[i]] <- rbind(os_summary[[i]],temp_row )
+  }
+}
+
+
+GGPLOT_LIST$P_R <- list()
+for(i in 1:length(os_summary)){
+  
+  which <- which(os_summary[[i]]$delta_beta == 0.2 &
+               os_summary[[i]]$noise == 0.5 )
+  title <- paste("p_r_all_methods__",names(os_summary)[i] , sep="")
+  gg <- ggplot(os_summary[[i]][which,], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method, color=method), size=0.8) +
+    xlim(c(0,1))+
+    ylim(c(0,1))+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0)
+    )
+    ggtitle(title)
+  plot(gg)
+  GGPLOT_LIST$P_R[[title]] <- gg
+  
+  
+  which <- which(os_summary[[i]]$delta_beta == 0.2 &
+               os_summary[[i]]$noise == 0.5 &
+                 grepl("_2", os_summary[[i]]$method) )
+  title <- paste("p_r_methods_2__",names(os_summary)[i] , sep="")
+  gg <- ggplot(os_summary[[i]][which,], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method), size=0.8) +
+    scale_linetype_manual(values=c("longdash", "dotted", "solid", "dotdash"))+
+    xlim(c(0,1))+
+    ylim(c(0,1))+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0)
+    )
+    ggtitle(title)
+  plot(gg)
+  GGPLOT_LIST$P_R[[title]] <- gg
+  
+  
+  which <- grep("_2", os_summary[[i]]$method)
+  title <- paste("p_r_delta_beta_noise__",names(os_summary)[i] , sep="")
+  gg <- ggplot(os_summary[[i]][which,], aes(x=Recall, y=Precision))+
+    geom_path(aes(linetype=method), size=0.8) +
+    facet_grid( delta_beta ~ noise,  labeller = label_both)+
+    scale_linetype_manual(values=c("longdash", "dotted", "solid", "dotdash"))+
+    xlim(c(0,1))+
+    ylim(c(0,1))+
+    theme_bw()+
+    theme(
+      plot.background = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text=element_text(face="bold", size=12),
+      strip.text = element_text(face="bold", size=12, angle=0),
+      axis.text = element_text(face="bold", size=12, angle=0)
+    )
+  plot(gg)
+  GGPLOT_LIST$P_R[[title]] <- gg
+}
+
+for(i in 1:length(GGPLOT_LIST$P_R)){
+  plot(GGPLOT_LIST$P_R[[i]])
+  filename <- paste(figures_dir, names(GGPLOT_LIST$P_R)[i],"_P_R.png",sep = "") 
+  ggsave(
+    filename=filename,
+    plot = GGPLOT_LIST$P_R[[i]],
+    device = "png",
+    path = NULL,
+    scale = 1,
+    width = ifelse(grepl("method",filename), 4.7,8),
+    height = ifelse(grepl("method",filename), 3,7),
+    units = c("in"),
+    dpi = ifelse(grepl("method",filename), 320,230)
+  )
+}
+
+
+aucpr_df_model <- data.frame(method=character(), delta_beta=numeric(),
+                       noise=numeric(), aucpr=character(), rep=character())
+aucpr_list <- list()
+
+for(i in 1:length(OPERATING_STATS)){
+  aucpr_df <- aucpr_df_model
+  for(j in unique(OPERATING_STATS[[i]]$db_method_noise_rep)){
+    which <- which(OPERATING_STATS[[i]]$db_method_noise_rep==j)
+    
+    aucpr_df <-  rbind(aucpr_df,
+                       data.frame(method=unique(OPERATING_STATS[[i]]$method[which]),
+                                  delta_beta=unique(OPERATING_STATS[[i]]$delta_beta[which]),
+                                  noise=unique(OPERATING_STATS[[i]]$noise[which]),
+                                  rep=unique(OPERATING_STATS[[i]]$rep[which]),
+                                  aucpr=
+                                    auc(OPERATING_STATS[[i]]$Recall[which],OPERATING_STATS[[i]]$Precision[which] )
+                       )
+    )
+    
+  }
+  head(aucpr_df)
+  
+  temp_df <-aggregate(cbind(aucpr) ~ method + delta_beta + noise, data=aucpr_df, FUN=mean, na.rm=TRUE)
+  temp_df$aucpr_sd <-aggregate(cbind(aucpr) ~ method + delta_beta + noise, data=aucpr_df, FUN=sd, na.rm=TRUE)$aucpr
+  
+  
+  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=3)
+  aucpr_list[[names(OPERATING_STATS)[i] ]]$aucpr_df <- temp_df
+}
+
+
+```
+
+
+
+```{r export all tables}
+
+## full table for supplemental
+GLOBAL_OPERATING_STATS
+## summary table for main
+
+
+for(i in 1:length(GLOBAL_OPERATING_STATS)){
+  export_gos <- GLOBAL_OPERATING_STATS[[i]]
+  export_gos$method <- gsub("bumphunter_2", "bumphunter:maxWidth=1Mb",export_gos$method)
+  export_gos$method <- gsub("combp_2", "comb-p:dist=1Mb,step=5kb",export_gos$method)
+  export_gos$method <- gsub("dmrcate_2", "DMRcate:lambda=1Mb,C=2000",export_gos$method)
+  export_gos$method <- gsub("dmrscaler_2", "DMRscaler:benj-yuk",export_gos$method)
+  export_gos$method <- gsub("bumphunter_1", "bumphunter:maxWidth=1Mb",export_gos$method)
+  export_gos$method <- gsub("combp_1", "comb-p:dist=1Mb,step=5kb",export_gos$method)
+  export_gos$method <- gsub("dmrcate_1", "DMRcate:lambda=1Mb,C=2000",export_gos$method)
+  export_gos$method <- gsub("dmrscaler_1", "DMRscaler:bonferroni",export_gos$method)
+  filename <- paste(tables_dir, "global_operating_stats_", names(GLOBAL_OPERATING_STATS)[i],".csv", sep="")
+  write.csv(export_gos, file = filename)
+}
+
+
+
+GOS_summary <- list()
+for(i in 1:length(GLOBAL_OPERATING_STATS)){
+  GOS_summary[[ names(GLOBAL_OPERATING_STATS)[i] ]] <- list()
+  temp <- GLOBAL_OPERATING_STATS[[i]]
+  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC, CG_PROP_DIFF ) ~ method + delta_beta + noise, data=temp, FUN=mean, na.rm=TRUE)
+  GOS_summary[[i]]$gos_means <- temp_df
+  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC, CG_PROP_DIFF) ~ method + delta_beta + noise, data=temp, FUN=sd, na.rm=TRUE)
+  GOS_summary[[i]]$gos_std <- temp_df
+  
+  temp_df <- GOS_summary[[i]]$gos_means
+  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=2)
+  temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
+  
+  GOS_summary[[i]]$gos_mean_std <- temp_df
+  
+  temp_df <- GOS_summary[[i]]$gos_std
+  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=1)
+  temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
+  
+  temp_df[,4:ncol(temp_df)] <- paste(as.matrix(GOS_summary[[i]]$gos_mean_std[,4:ncol(temp_df)]),"(\u00b1", as.matrix(temp_df[,4:ncol(temp_df)]),")", sep=""  )
+  GOS_summary[[i]]$gos_mean_std <- temp_df
+}
+
+
+
+
+
+for(i in 1:length(GOS_summary)){
+  
+  export_gos_summary <- GOS_summary[[i]]$gos_mean_std
+  # export_gos_summary$AUCPR <- paste(as.character(signif(export_gos_summary$aucpr,2)),"(\u00b1",
+  #                                   as.character(signif(export_gos_summary$aucpr_sd,1)), ")", sep="")
+  # export_gos_summary$aucpr <- NULL
+  # export_gos_summary$aucpr_sd <- NULL
+  
+  colnames(export_gos_summary)[which(colnames(export_gos_summary)=="Precision")] <- "Precision = 1-FDR"
+  export_gos_summary$FDR <- NULL
+  
+  export_gos_summary$method <- gsub("bumphunter_2", "bumphunter",export_gos_summary$method)
+  export_gos_summary$method <- gsub("combp_2", "comb-p",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrcate_2", "DMRcate",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrscaler_2", "DMRscaler",export_gos_summary$method)
+  
+  temp <- export_gos_summary[grep("_1",export_gos_summary$method, invert = T),]
+  rownames(temp) <- NULL
+  filename <- paste(tables_dir, "global_operating_stats_summary_2only__", names(GOS_summary)[i],".csv", sep="")
+  write.csv(temp, file = filename)
+  # 
+  # export_gos_summary <- merge(GOS_summary[[i]]$gos_mean_std, aucpr_list[[i]]$aucpr_df, sort=F)
+  # export_gos_summary$AUCPR <- paste(as.character(export_gos_summary$aucpr),"(\u00b1",
+  #                                   as.character(signif(export_gos_summary$aucpr_sd,1)), ")", sep="")
+  # export_gos_summary$aucpr <- NULL
+  # export_gos_summary$aucpr_sd <- NULL
+  
+  colnames(export_gos_summary)[which(colnames(export_gos_summary)=="Precision")] <- "Precision = 1-FDR"
+  export_gos_summary$FDR <- NULL
+  export_gos_summary$method <- gsub("bumphunter_2", "bumphunter:\nmaxWidth=1Mb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("combp_2", "comb-p:\ndist=1Mb,step=5kb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrcate_2", "DMRcate:\nlambda=1Mb,C=2000",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrscaler_2", "DMRscaler:\nbenj-yuk",export_gos_summary$method)
+  export_gos_summary$method <- gsub("bumphunter_1", "bumphunter:\nmaxWidth=1Mb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("combp_1", "comb-p:\ndist=1Mb,step=5kb",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrcate_1", "DMRcate:\nlambda=1Mb,C=2000",export_gos_summary$method)
+  export_gos_summary$method <- gsub("dmrscaler_1", "DMRscaler:\nbonferroni",export_gos_summary$method)
+  
+  
+  filename <- paste(tables_dir, "global_operating_stats_summary__", names(GOS_summary)[i],".csv", sep="")
+  write.csv(export_gos_summary, file = filename)
+  
+}
+
+
+
+```
+
+
+```{r simul cpg count v simul width}
+
+simul_width_v_cpg_count <- data.frame(simul_width=numeric(), cpg_count=numeric())
+for(i in 1:length(simul_constructor_list)){
+  simul <- simul_constructor_list[[i]]
+  simul_grs <- simul$grange
+  simul_grs$cpg_count <- countOverlaps(simul_grs, locs_gr )
+  simul_width_v_cpg_count <- rbind(simul_width_v_cpg_count,
+                                   data.frame(simul_width = width(simul_grs),
+                                              cpg_count = simul_grs$cpg_count) )
+  
+}
+
+gg <- ggplot(simul_width_v_cpg_count, aes(x=log10(simul_width), y=log2(cpg_count))) +
+  xlab("log10( Simulated DMR Width )")+
+  ylab("log2( CpG Probe Count in DMR )")+
+  
+  geom_bin_2d(alpha=0.8)+
+  geom_point(size=0.3, alpha=0.5,color="white")+
+  #scale_fill_gradient(low="grey70", high="grey20")+
+  scale_fill_continuous(type = "viridis")+
+  scale_y_continuous( breaks = seq(0,10,1))+
+  scale_x_continuous( breaks = seq(0,10,1)) +
+  stat_regline_equation(label.x=2, label.y=10) +
+  stat_cor(aes(label=..rr.label..), label.x=2, label.y=9.5)+
+  theme_bw()+
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    text=element_text(face="bold", size=12),
+    strip.text = element_text(face="bold", size=12, angle=0),
+    axis.text = element_text(face="bold", size=12, angle=0),
+    legend.position = "none"
+  )+ 
+  geom_smooth(method='lm', formula= y~x, color="red") 
+gg
+
+filename <- paste(figures_dir,"simul_width_v_num_cgs.png",sep = "") 
+ggsave(
+  filename=filename,
+  plot = gg,
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 7,
+  height = 5,
+  units = c("in"),
+  dpi = 250
+)
+```

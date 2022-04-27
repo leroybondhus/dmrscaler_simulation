@@ -7,7 +7,7 @@ library("doParallel")
 registerDoParallel()
 
 
-output_dir <-paste("./results/")
+output_dir <-paste("./results/fdr_testing/")
 
 load("fdr_simul_setup.Rdata")
 
@@ -38,6 +38,13 @@ g1 <- simul_set$g1
 g2 <- simul_set$g2
 B_mod <- as.matrix(B[,g12])
 
+## if cg_order_rand, remove real spatial structure of CpGs
+if(simul_set$pars$cg_order_rand){
+  temp <- rownames(B_mod)
+  B_mod <- B_mod[sample(1:nrow(B_mod),nrow(B_mod)),]
+  rownames(B_mod) <- temp
+}
+
 dmr_names <- unique(simul_constructor_list[[1]]$dmr_locs$dmr_name)
 for(i in 1:length(dmr_names)){
   dmr_i <- dmr_names[i]
@@ -64,6 +71,12 @@ method_name <- method_set$method
 if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   mwr <- DMRscaler::run_MWW(g1,g2,B_mod)
   locs$pval <- mwr$p_val
+
+  cg_fdr_cutoff <- simul_set$pars$cg_fdr_cutoff
+  pval_cutoff <- DMRscaler::get_loc_fdr_pval(B_mod, g1,g2, wilcox.test, fdr=cg_fdr_cutoff)
+  region_fdr_cutoff <- simul_set$pars$region_fdr_cutoff
+
+
 } else if(grepl("bumphunter", method_name, ignore.case = TRUE)){
   design <- rep(-1,length(colnames(B_mod)))
   design[which(is.element(colnames(B_mod),g1))] <- 1

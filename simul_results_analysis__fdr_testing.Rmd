@@ -230,6 +230,7 @@ if(file.exists("fdr_testing_GLOBAL_OPERATING_STATS.Rdata")){
                              .combine = 'temp_comb',
                              .errorhandling = "pass" ) %dopar% {
     temp_colnames <- c("method","delta_beta","noise","rep",
+                       "cg_order_rand", "cg_fdr_cutoff","region_fdr_cutoff",
                      "P", "N", "Called_P", "Called_N", ## positive count, negative count
                      "TP_called", "TP_simul",
                      "TN_called" ,"TN_simul",
@@ -269,6 +270,9 @@ if(file.exists("fdr_testing_GLOBAL_OPERATING_STATS.Rdata")){
       OP_STATS[[j]]$delta_beta <- simul$pars$delta_beta
       OP_STATS[[j]]$noise <- simul$pars$noise
       OP_STATS[[j]]$rep <- simul$pars$rep
+      OP_STATS[[j]]$cg_order_rand <- simul$pars$cg_order_rand
+      OP_STATS[[j]]$cg_fdr_cutoff <- simul$pars$cg_fdr_cutoff
+      OP_STATS[[j]]$region_fdr_cutoff <- simul$pars$region_fdr_cutoff
     }
     
     ## start : add TP rate to grs features ###

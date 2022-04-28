@@ -61,7 +61,7 @@ simul_pars <- merge(merge(merge(merge(merge(merge(data.frame("num_samples"=c(8))
                                 data.frame("delta_beta"=c(0.2))),
                           data.frame("noise" = c(0.5))),
                     data.frame("rep"=c(1:3))),
-                  data.frame("cg_order_rand"=c(T,F))),data.frame("cg_fdr_cutoff"=c(0.05, 0.10, 0.20, 0.40, 0.80)) ), data.frame("region_fdr_cutoff"=c(0.05, 0.10, 0.20)) )
+                  data.frame("cg_order_rand"=c(T,F))),data.frame("cg_fdr_cutoff"=c(0.05, 0.10, 0.20, 0.40, 0.80)) ), data.frame("region_pval_cutoff"=c(0.05)) )
 
 simul_pars <- simul_pars[order(simul_pars$num_samples, simul_pars$delta_beta, simul_pars$noise, simul_pars$rep),]
 simul_pars_list <- split(simul_pars, 1:nrow(simul_pars))
@@ -112,7 +112,7 @@ simul_constructor_list <- foreach(simul_pars = simul_pars_list, .final = functio
 
 method_set_list <- list(
   dmrscaler_fdr = list(method="dmrscaler",
-                     function_call=" DMRscaler::dmrscaler(locs=locs,locs_pval_cutoff=pval_cutoff,region_signif_method=\"ben\",region_signif_cutoff=region_fdr_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " )
+                     function_call=" DMRscaler::dmrscaler(locs=locs,locs_pval_cutoff=pval_cutoff,region_signif_method=\"bon\",region_signif_cutoff=region_pval_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " )
 
 )
 

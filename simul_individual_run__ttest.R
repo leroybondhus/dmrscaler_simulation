@@ -79,6 +79,8 @@ method_name <- method_set$method
 if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   mwr <- run_TT(g1,g2,B_mod)
   locs$pval <- mwr$p_val
+  pval_cutoff <- DMRscaler::get_loc_fdr_pval(B_mod, g1,g2, wilcox.test, fdr=0.05)
+  region_fdr_cutoff <- 0.01
 } else if(grepl("bumphunter", method_name, ignore.case = TRUE)){
   design <- rep(-1,length(colnames(B_mod)))
   design[which(is.element(colnames(B_mod),g1))] <- 1

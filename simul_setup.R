@@ -111,9 +111,9 @@ simul_constructor_list <- foreach(simul_pars = simul_pars_list, .final = functio
 
 method_set_list <- list(
   dmrscaler_1 = list(method="dmrscaler",
-                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = pval_cutoff, region_signif_method = \"bon\", region_signif_cutoff = region_fdr_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " ),
+                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = pval_cutoff_1, region_signif_method = \"bon\", region_signif_cutoff = region_fdr_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " ),
   dmrscaler_2 = list(method="dmrscaler",
-                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = pval_cutoff, region_signif_method = \"ben\", region_signif_cutoff = region_fdr_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " ),
+                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = pval_cutoff_2, region_signif_method = \"bon\", region_signif_cutoff = region_fdr_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " ),
   bumphunter_1 = list(method="bumphunter",
                       function_call="bumphunter(B_mod,as.matrix(design),chr = locs$chr, pos=locs$pos, cutoff=0.05, maxGap=1e3, B=250, smoothFunction=loessByCluster )"),
   bumphunter_2 = list(method="bumphunter",

@@ -79,8 +79,8 @@ method_name <- method_set$method
 if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
   mwr <- run_TT(g1,g2,B_mod)
   locs$pval <- mwr$p_val
-  pval_cutoff_1 <- DMRscaler::get_loc_fdr_pval(B_mod, g1,g2, wilcox.test, fdr=0.1)
-  pval_cutoff_2 <- DMRscaler::get_loc_fdr_pval(B_mod, g1,g2, wilcox.test, fdr=0.01)
+  pval_cutoff_1 <- DMRscaler::get_loc_fdr_pval(B_mod, g1,g2, t.test, fdr=0.1)
+  pval_cutoff_2 <- DMRscaler::get_loc_fdr_pval(B_mod, g1,g2, t.test, fdr=0.01)
   region_pval_cutoff <- 0.01
 } else if(grepl("bumphunter", method_name, ignore.case = TRUE)){
   design <- rep(-1,length(colnames(B_mod)))

@@ -44,8 +44,8 @@ method_set <- method_set_list[[METHOD_SET_ID]]
 method_set_name <- names(method_set_list)[METHOD_SET_ID]
 
 
-if(grepl("bumphunter", method_name, ignore.case = TRUE)){stop("stopping")}
-if(grepl("dmrcate", method_name, ignore.case = TRUE)){stop("stopping")}
+if(grepl("bumphunter", method_set_name, ignore.case = TRUE)){stop("stopping")}
+if(grepl("dmrcate", method_set_name, ignore.case = TRUE)){stop("stopping")}
 
 ### Start: Simulate DMRs ####
 g12 <- c(simul_set$g1,simul_set$g2)

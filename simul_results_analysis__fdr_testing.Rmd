@@ -12,7 +12,7 @@ library(data.table)
 library(stringr)
 library(foreach)
 library(doParallel)
-registerDoParallel(detectCores()-2)
+registerDoParallel(detectCores()-1)
 library(ggplot2)
 library(ggExtra)
 library(scales)
@@ -229,6 +229,8 @@ if(file.exists("fdr_testing_GLOBAL_OPERATING_STATS.Rdata")){
   GLOBAL_OPERATING_STATS <- foreach(i = 1:length(simul_results),
                              .combine = 'temp_comb',
                              .errorhandling = "pass" ) %dopar% {
+    library(stringr)
+    library(GenomicRanges)                               
     temp_colnames <- c("method","delta_beta","noise","rep",
                        "cg_order_rand", "cg_fdr_cutoff","region_pval_cutoff",
                      "P", "N", "Called_P", "Called_N", ## positive count, negative count

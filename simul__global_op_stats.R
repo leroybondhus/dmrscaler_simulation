@@ -71,12 +71,13 @@ for(simul_id in 1:length(simul_constructor_list)){
     result <- fread(filename)
     if(method_set_list[[method_id]]$method=="dmrscaler"){
       result <- result[grep("64",result$layer),]
+      result$pval_region <- result$pval_region_adj
     }
     simul_results[[basename(filename)]]$grange <- GRanges(
       seqnames = result$chr,
       ranges = IRanges(start = result$start,
                        end = result$stop,
-                       pval_region = result$pval_region_adj),
+                       pval_region = result$pval_region),
       strand = rep("*",nrow(result)),
       seqinfo = chr_seqinfo
     )

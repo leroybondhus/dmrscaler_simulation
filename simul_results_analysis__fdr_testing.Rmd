@@ -678,7 +678,7 @@ if(file.exists("fdr_testing__OPERATING_STATS.Rdata")){
       }
     
       temp_seq <- floor(seq(from=1,to=length(called_grs),
-                            length.out = min(length(called_grs),5)))
+                            length.out = min(length(called_grs),20)))
       temp_colnames <- c("method","delta_beta","noise","rep",
                          "Precision", "Recall", "FDR", "Power" )
       temp_df <- data.frame(matrix(NA, nrow=length(temp_seq),

@@ -8,7 +8,7 @@ registerDoParallel(detectCores()-1)
 library(ggplot2)
 library(ggExtra)
 library(scales)
-library(MESS)
+
 
 load("simul_setup.Rdata")
 

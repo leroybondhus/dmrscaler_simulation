@@ -61,7 +61,9 @@ simul_pars <- merge(merge(merge(merge(merge(merge(data.frame("num_samples"=c(8))
                                 data.frame("delta_beta"=c(0.2))),
                           data.frame("noise" = c(0.5))),
                     data.frame("rep"=c(1:3))),
-                  data.frame("cg_order_rand"=c(T,F))),data.frame("cg_fdr_cutoff"=c(0.05, 0.10, 0.20, 0.40, 0.80)) ), data.frame("region_pval_cutoff"=c(0.05)) )
+                  data.frame("cg_order_rand"=c(F))),data.frame("cg_fdr_cutoff"=c(0.05, 0.10, 0.20)) ), data.frame("region_cutoff"=c(0.01,0.05,0.1,0.2)) )
+simul_pars$cg_order_rand <- NULL
+simul_pars <- unique(simul_pars)
 
 simul_pars <- simul_pars[order(simul_pars$num_samples, simul_pars$delta_beta, simul_pars$noise, simul_pars$rep),]
 simul_pars_list <- split(simul_pars, 1:nrow(simul_pars))
@@ -111,9 +113,10 @@ simul_constructor_list <- foreach(simul_pars = simul_pars_list, .final = functio
 ## NOTE: with simul_constructor_list, simulations are deterministic i.e. the random sampling happens within definition of the simul_constructor_list
 
 method_set_list <- list(
-  dmrscaler_fdr = list(method="dmrscaler",
-                     function_call=" DMRscaler::dmrscaler(locs=locs,locs_pval_cutoff=pval_cutoff,region_signif_method=\"bon\",region_signif_cutoff=region_pval_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " )
-
+  dmrscaler_1 = list(method="dmrscaler",
+                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = pval_cutoff, region_signif_method = \"bon\", region_signif_cutoff = region_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " ),
+  dmrscaler_2 = list(method="dmrscaler",
+                     function_call=" DMRscaler::dmrscaler(locs = locs, locs_pval_cutoff = pval_cutoff, region_signif_method = \"ben\", region_signif_cutoff = region_cutoff, window_type = \"k_near\", window_sizes = c(2,4,8,16,32,64), output_type = \"comp\") " )
 )
 
 

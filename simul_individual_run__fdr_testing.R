@@ -74,7 +74,7 @@ if(grepl("dmrscaler", method_name, ignore.case = TRUE)){
 
   cg_fdr_cutoff <- simul_set$pars$cg_fdr_cutoff
   pval_cutoff <- DMRscaler::get_loc_fdr_pval(B_mod, g1,g2, wilcox.test, fdr=cg_fdr_cutoff)
-  region_pval_cutoff <- simul_set$pars$region_pval_cutoff
+  region_cutoff <- simul_set$pars$region_cutoff
 
 
 } else if(grepl("bumphunter", method_name, ignore.case = TRUE)){

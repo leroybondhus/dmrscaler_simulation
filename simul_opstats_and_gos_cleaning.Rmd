@@ -1,0 +1,50 @@
+---
+title: "simul_opstats_and_gos_cleaning"
+output: html_document
+---
+
+
+
+```{r}
+library(stringr)
+
+opstat_raw_files <- list.files("./results/tables/opstats_tables/", full.names = T)
+opstat_raw_files <- opstat_raw_files[grep("_OS\\.csv",opstat_raw_files)]
+gos_raw_files <- list.files("./results/tables/global_opstats_tables/", full.names = T)
+gos_raw_files <- gos_raw_files[grep("_GOS\\.csv",gos_raw_files)]
+
+fname_part <- str_split_fixed(basename(opstat_raw_files), "_",3)
+for(i in unique(fname_part[,1])){
+  filename <- paste(i,"_OPERATING_STATS.Rdata",sep="")
+  OPERATING_STATS <- list()
+  for(j in c("feature","basepair","cpg_probe")){
+    fnames <- opstat_raw_files[grep(paste(i,".*",j,".*",sep=""), opstat_raw_files)]
+    temp_df <- read.csv(fnames[1])[0,]
+    for(f in fnames){
+      temp_df <- rbind(temp_df, read.csv(f))
+    }
+    
+    OPERATING_STATS[[j]] <- temp_df
+  }
+  save(OPERATING_STATS ,file=filename)
+}
+
+
+
+fname_part <- str_split_fixed(basename(gos_raw_files), "_",3)
+for(i in unique(fname_part[,1])){
+  filename <- paste(i,"_GLOBAL_OPERATING_STATS.Rdata",sep="")
+  GLOBAL_OPERATING_STATS <- list()
+  for(j in c("feature","basepair","cpg_probe")){
+    fnames <- gos_raw_files[grep(paste(i,".*",j,".*",sep=""), gos_raw_files)]
+    temp_df <- read.csv(fnames[1])[0,]
+    for(f in fnames){
+      temp_df <- rbind(temp_df, read.csv(f))
+    }
+    
+    GLOBAL_OPERATING_STATS[[j]] <- temp_df
+  }
+  save(GLOBAL_OPERATING_STATS ,file=filename)
+}
+
+```

@@ -242,7 +242,7 @@ OP_STATS
 
 for(f in names(OP_STATS)){
   out_filename <- str_replace(names(simul_results)[i], "_result.csv","_GOS.csv")
-  out_filename <- paste(output_dir,out_filename ,sep="")
+  out_filename <- paste(output_dir,f,"_",out_filename ,sep="")
   write.csv(OP_STATS[[f]], out_filename)
 }
 

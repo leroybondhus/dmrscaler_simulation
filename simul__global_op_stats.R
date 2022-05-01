@@ -236,8 +236,6 @@ if(length(called_grs)==0){
                                     length(findOverlaps(locs_gr, cs_inverse_intersect)@from))
   OP_STATS$cpg_probe$CG_PROP_DIFF <- sum(countOverlaps(called_grs,simul_cg_grs))/sum(countOverlaps(called_grs,locs_gr))
 }
-write.csv(paste(simul_id, method_id, sep = ","),
-          file=paste("temp_simul_method",simul_id, method_id,".csv",sep = "_") )
 
 OP_STATS
 ## end: cpg_probe operating characteristics
@@ -245,7 +243,7 @@ OP_STATS
 for(f in names(OP_STATS)){
   out_filename <- str_replace(names(simul_results)[i], "_result.csv","_GOS.csv")
   out_filename <- paste(output_dir,out_filename ,sep="")
-  write.csv(OPSTATS[[f]], out_filename)
+  write.csv(OP_STATS[[f]], out_filename)
 }
 
 

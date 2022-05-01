@@ -164,13 +164,12 @@ for(j in 1:length(temp_seq)){
  OP_STATS$cpg_probe$Power[j] <- OP_STATS$cpg_probe$Recall[j]
 
 }
-write.csv(paste(simul_id, method_id, sep = ","),
-         file=paste("temp_opstat_simul_method",simul_id, method_id,".csv",sep = "_") )
+
 
 for(f in names(OP_STATS)){
  out_filename <- str_replace(names(simul_results)[i], "_result.csv","_OS.csv")
  out_filename <- paste(output_dir,out_filename ,sep="")
- write.csv(OPSTATS[[f]], out_filename)
+ write.csv(OP_STATS[[f]], out_filename)
 }
 
 

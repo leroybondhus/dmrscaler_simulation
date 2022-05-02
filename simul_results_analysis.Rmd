@@ -15,12 +15,11 @@ library(ggplot2)
 library(ggExtra)
 library(scales)
 library(MESS)
+library(ggpubr)
 ```
 
 ```{r}
-load("locs.Rdata")
-load("method_set_list.Rdata")
-load("simul_constructor_list.Rdata")
+load("simul_setup.Rdata")
 
 figures_dir <- "./results/figures/"
 tables_dir <- "./results/tables/"
@@ -64,19 +63,19 @@ gg <- ggplot(simul_times[grep("_2",simul_times$method),], aes(y=method, x=log10(
 gg
 
 
-filename <- paste(figures_dir, "method_runtimes.png",sep = "") 
-ggsave(
-  filename=filename,
-  plot = gg,
-  device = "png",
-  path = NULL,
-  scale = 1,
-  width = 6.2,
-  height = 2,
-  units = c("in"),
-  dpi = 320
-)
-  
+# filename <- paste(figures_dir, "method_runtimes.png",sep = "") 
+# ggsave(
+#   filename=filename,
+#   plot = gg,
+#   device = "png",
+#   path = NULL,
+#   scale = 1,
+#   width = 6.2,
+#   height = 2,
+#   units = c("in"),
+#   dpi = 320
+# )
+#   
 
 ```
 
@@ -125,9 +124,11 @@ for(simul_id in 1:length(simul_constructor_list)){
     filename <- filenames[grep(paste("simul_set_",simul_id,
                                      "__method_set_",method_id,
                                      sep=""), filenames)]
+    if(length(filename)==0){next}
     result <- fread(filename)
     if(method_set_list[[method_id]]$method=="dmrscaler"){
       result <- result[grep("64",result$layer),]
+      result$pval_region  <- result$pval_region_adj
     }
     simul_results[[basename(filename)]]$grange <- GRanges(
       seqnames = result$chr,
@@ -221,47 +222,6 @@ for(i in 1:length(simul_results)){
 
 ```
 
-```{r called_results setup}
-
-CALLED_RESULTS <- data.frame("method"=character(),
-                          "delta_beta"=numeric(),
-                          "noise"=numeric(),
-                          "rep"=numeric(),
-                          "TP"=numeric(),
-                          "pval"=numeric())
-
-CALLED_RESULTS <- foreach(i = 1:length(simul_results),
-                        .combine = rbind,
-                        .errorhandling = "pass" ) %dopar% {
-  simul_id <- as.numeric(stringr::str_match(names(simul_results)[i],
-                                   "simul_set_([0-9]*)")[2])
-  simul <- simul_constructor_list[[simul_id]]
-  method_id <- as.numeric(stringr::str_match(names(simul_results)[i],
-                                    "method_set_([0-9]*)")[2])
-  called_grs <- simul_results[[i]]$grange
-  simul_grs <- simul$grange
-  temp_df <- data.frame("method" = names(method_set_list)[method_id],
-                        "delta_beta" = simul$pars$delta_beta,
-                        "noise" = simul$pars$noise,
-                        "rep" = simul$pars$rep)
-  if(length(called_grs)==0){
-    temp_df <- cbind(temp_df, data.frame( "pval" = NA, 
-                                          "chr" = NA,
-                                          "start" = NA,
-                                          "end" = NA))
-  } else {
-    temp_df <- cbind(temp_df, data.frame( "pval" = called_grs$pval_region, 
-                                          "chr" = as.character(seqnames(called_grs)),
-                                          "start" = start(called_grs),
-                                          "end" = end(called_grs)))
-  }
-
-  
-  temp_df
-}
-
-```
-
 
 ```{r global_operating_statistics setup}
 ### want to measures and record global stats used in benchmark Mallik et al 2018
@@ -273,8 +233,8 @@ CALLED_RESULTS <- foreach(i = 1:length(simul_results),
 ###               Precision-Delta_Beta, Power-Delta_Beta
 ###               Precision-Noise, Power-Noise
 ###NOTE this foreach takes ~30-60 min on 12 cores-  save output and load instead of rerunning
-if(file.exists("GLOBAL_OPERATING_STATS.Rdata")){
-  load("GLOBAL_OPERATING_STATS.Rdata")
+if(file.exists("simul_GLOBAL_OPERATING_STATS.Rdata")){
+  load("simul_GLOBAL_OPERATING_STATS.Rdata")
 } else{
   temp_comb <- function(x, ...){
     mapply(rbind,x,...,SIMPLIFY = FALSE)
@@ -696,8 +656,8 @@ for(i in 1:length(GGPLOT_LIST$ggl_mapping_values)){
 temp_comb <- function(x, ...){
     mapply(rbind,x,...,SIMPLIFY = FALSE)
 }
-if(file.exists("OPERATING_STATS.Rdata")){
-  load("OPERATING_STATS.Rdata")
+if(file.exists("simul_OPERATING_STATS.Rdata")){
+  load("simul_OPERATING_STATS.Rdata")
 } else{
   OPERATING_STATS <- foreach(i = 1:length(simul_results),
                              .combine = 'temp_comb',
@@ -781,7 +741,7 @@ if(file.exists("OPERATING_STATS.Rdata")){
       
   }
   
-  save(OPERATING_STATS, file="OPERATING_STATS.Rdata")
+  save(OPERATING_STATS, file="simul_OPERATING_STATS.Rdata")
 }
 
 OPERATING_STATS

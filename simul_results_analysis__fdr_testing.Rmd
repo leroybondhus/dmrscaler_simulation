@@ -221,8 +221,8 @@ CALLED_RESULTS <- foreach(i = 1:length(simul_results),
 ###               Precision-Delta_Beta, Power-Delta_Beta
 ###               Precision-Noise, Power-Noise
 ###NOTE this foreach takes ~30-60 min on 12 cores-  save output and load instead of rerunning
-if(file.exists("fdr_testing_GLOBAL_OPERATING_STATS.Rdata")){
-  load("fdr_testing_GLOBAL_OPERATING_STATS.Rdata")
+if(file.exists("fdr_GLOBAL_OPERATING_STATS.Rdata")){
+  load("fdr_GLOBAL_OPERATING_STATS.Rdata")
 } else{
   temp_comb <- function(x, ...){
     mapply(rbind,x,...,SIMPLIFY = FALSE)
@@ -384,7 +384,7 @@ if(file.exists("fdr_testing_GLOBAL_OPERATING_STATS.Rdata")){
     OP_STATS
     ## end: cpg_probe operating characteristics
   }
-  save(GLOBAL_OPERATING_STATS, file="fdr_testing_GLOBAL_OPERATING_STATS.Rdata")
+  save(GLOBAL_OPERATING_STATS, file="fdr_GLOBAL_OPERATING_STATS.Rdata")
 }
 
 for(i in 1:length(GLOBAL_OPERATING_STATS)){

@@ -940,24 +940,34 @@ for(i in 1:length(GLOBAL_OPERATING_STATS)){
 
 GOS_summary <- list()
 for(i in 1:length(GLOBAL_OPERATING_STATS)){
+  
+  
+  
   GOS_summary[[ names(GLOBAL_OPERATING_STATS)[i] ]] <- list()
   temp <- GLOBAL_OPERATING_STATS[[i]]
-  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC, CG_PROP_DIFF ) ~ method + delta_beta + noise, data=temp, FUN=mean, na.rm=TRUE)
+  temp <- merge(temp, aucpr_list[[i]]$aucpr_df, sort=F)
+  temp$AUCPR <- paste(as.character(temp$aucpr),"(\u00b1",
+                                    as.character(signif(temp$aucpr_sd,1)), ")", sep="")
+  temp$aucpr <- NULL
+  temp$aucpr_sd <- NULL
+  
+  
+  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC, CG_PROP_DIFF) ~ method + delta_beta + noise + AUCPR, data=temp, FUN=mean, na.rm=TRUE)
   GOS_summary[[i]]$gos_means <- temp_df
-  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC, CG_PROP_DIFF) ~ method + delta_beta + noise, data=temp, FUN=sd, na.rm=TRUE)
+  temp_df <-aggregate(cbind(Precision, Recall, Specificity, FDR, F1, MCC, CG_PROP_DIFF) ~ method + delta_beta + noise + AUCPR, data=temp, FUN=sd, na.rm=TRUE)
   GOS_summary[[i]]$gos_std <- temp_df
   
   temp_df <- GOS_summary[[i]]$gos_means
-  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=2)
-  temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
+  temp_df[,5:ncol(temp_df)] <- signif(temp_df[,5:ncol(temp_df)], digits=2)
+  temp_df[,5:ncol(temp_df)] <- apply(temp_df[,5:ncol(temp_df)], 2, as.character)
   
   GOS_summary[[i]]$gos_mean_std <- temp_df
   
   temp_df <- GOS_summary[[i]]$gos_std
-  temp_df[,4:ncol(temp_df)] <- signif(temp_df[,4:ncol(temp_df)], digits=1)
-  temp_df[,4:ncol(temp_df)] <- apply(temp_df[,4:ncol(temp_df)], 2, as.character)
+  temp_df[,5:ncol(temp_df)] <- signif(temp_df[,5:ncol(temp_df)], digits=1)
+  temp_df[,5:ncol(temp_df)] <- apply(temp_df[,5:ncol(temp_df)], 2, as.character)
   
-  temp_df[,4:ncol(temp_df)] <- paste(as.matrix(GOS_summary[[i]]$gos_mean_std[,4:ncol(temp_df)]),"(\u00b1", as.matrix(temp_df[,4:ncol(temp_df)]),")", sep=""  )
+  temp_df[,5:ncol(temp_df)] <- paste(as.matrix(GOS_summary[[i]]$gos_mean_std[,5:ncol(temp_df)]),"(\u00b1", as.matrix(temp_df[,5:ncol(temp_df)]),")", sep=""  )
   GOS_summary[[i]]$gos_mean_std <- temp_df
 }
 
@@ -986,11 +996,11 @@ for(i in 1:length(GOS_summary)){
   filename <- paste(tables_dir, "global_operating_stats_summary_2only__", names(GOS_summary)[i],".csv", sep="")
   write.csv(temp, file = filename)
   # 
-  # export_gos_summary <- merge(GOS_summary[[i]]$gos_mean_std, aucpr_list[[i]]$aucpr_df, sort=F)
-  # export_gos_summary$AUCPR <- paste(as.character(export_gos_summary$aucpr),"(\u00b1",
-  #                                   as.character(signif(export_gos_summary$aucpr_sd,1)), ")", sep="")
-  # export_gos_summary$aucpr <- NULL
-  # export_gos_summary$aucpr_sd <- NULL
+  export_gos_summary <- merge(GOS_summary[[i]]$gos_mean_std, aucpr_list[[i]]$aucpr_df, sort=F)
+  export_gos_summary$AUCPR <- paste(as.character(export_gos_summary$aucpr),"(\u00b1",
+                                    as.character(signif(export_gos_summary$aucpr_sd,1)), ")", sep="")
+  export_gos_summary$aucpr <- NULL
+  export_gos_summary$aucpr_sd <- NULL
   
   colnames(export_gos_summary)[which(colnames(export_gos_summary)=="Precision")] <- "Precision = 1-FDR"
   export_gos_summary$FDR <- NULL
